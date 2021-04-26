@@ -28,6 +28,9 @@ import Transforms from "../Core/Transforms.js";
 import CameraFlightPath from "./CameraFlightPath.js";
 import MapMode2D from "./MapMode2D.js";
 import SceneMode from "./SceneMode.js";
+/**new add code */
+import ScreenSpaceEventHandler from "../Core/ScreenSpaceEventHandler.js";
+import ScreenSpaceEventType from "../Core/ScreenSpaceEventType.js";
 
 /**
  * The camera is defined by a position, orientation, and view frustum.
@@ -1112,57 +1115,10 @@ Camera.prototype._setTransform = function (transform) {
   updateMembers(this);
 };
 
-var scratchAdjustOrthographicFrustumMousePosition = new Cartesian2();
-var scratchPickRay = new Ray();
+var scratchAdjustOrtghographicFrustumMousePosition = new Cartesian2();
+var pickGlobeScratchRay = new Ray();
 var scratchRayIntersection = new Cartesian3();
 var scratchDepthIntersection = new Cartesian3();
-
-function calculateOrthographicFrustumWidth(camera) {
-  // Camera is fixed to an object, so keep frustum width constant.
-  if (!Matrix4.equals(Matrix4.IDENTITY, camera.transform)) {
-    return Cartesian3.magnitude(camera.position);
-  }
-
-  var scene = camera._scene;
-  var globe = scene.globe;
-
-  var mousePosition = scratchAdjustOrthographicFrustumMousePosition;
-  mousePosition.x = scene.drawingBufferWidth / 2.0;
-  mousePosition.y = scene.drawingBufferHeight / 2.0;
-
-  var rayIntersection;
-  if (defined(globe)) {
-    var ray = camera.getPickRay(mousePosition, scratchPickRay);
-    rayIntersection = globe.pickWorldCoordinates(
-      ray,
-      scene,
-      true,
-      scratchRayIntersection
-    );
-  }
-
-  var depthIntersection;
-  if (scene.pickPositionSupported) {
-    depthIntersection = scene.pickPositionWorldCoordinates(
-      mousePosition,
-      scratchDepthIntersection
-    );
-  }
-
-  var distance;
-  if (defined(rayIntersection) || defined(depthIntersection)) {
-    var depthDistance = defined(depthIntersection)
-      ? Cartesian3.distance(depthIntersection, camera.positionWC)
-      : Number.POSITIVE_INFINITY;
-    var rayDistance = defined(rayIntersection)
-      ? Cartesian3.distance(rayIntersection, camera.positionWC)
-      : Number.POSITIVE_INFINITY;
-    distance = Math.min(depthDistance, rayDistance);
-  } else {
-    distance = Math.max(camera.positionCartographic.height, 0.0);
-  }
-  return distance;
-}
 
 Camera.prototype._adjustOrthographicFrustum = function (zooming) {
   if (!(this.frustum instanceof OrthographicFrustum)) {
@@ -1173,7 +1129,64 @@ Camera.prototype._adjustOrthographicFrustum = function (zooming) {
     return;
   }
 
-  this.frustum.width = calculateOrthographicFrustumWidth(this);
+  if (!Matrix4.equals(Matrix4.IDENTITY, this.transform)) {
+    this.frustum.width = Cartesian3.magnitude(this.position);
+    return;
+  }
+
+  var scene = this._scene;
+  var globe = scene.globe;
+  var rayIntersection;
+  var depthIntersection;
+
+  if (defined(globe)) {
+    var mousePosition = scratchAdjustOrtghographicFrustumMousePosition;
+    mousePosition.x = scene.drawingBufferWidth / 2.0;
+    mousePosition.y = scene.drawingBufferHeight / 2.0;
+
+    var ray = this.getPickRay(mousePosition, pickGlobeScratchRay);
+    rayIntersection = globe.pickWorldCoordinates(
+      ray,
+      scene,
+      true,
+      scratchRayIntersection
+    );
+
+    if (scene.pickPositionSupported) {
+      depthIntersection = scene.pickPositionWorldCoordinates(
+        mousePosition,
+        scratchDepthIntersection
+      );
+    }
+
+    if (defined(rayIntersection) && defined(depthIntersection)) {
+      var depthDistance = defined(depthIntersection)
+        ? Cartesian3.distance(depthIntersection, this.positionWC)
+        : Number.POSITIVE_INFINITY;
+      var rayDistance = defined(rayIntersection)
+        ? Cartesian3.distance(rayIntersection, this.positionWC)
+        : Number.POSITIVE_INFINITY;
+      this.frustum.width = Math.min(depthDistance, rayDistance);
+    } else if (defined(depthIntersection)) {
+      this.frustum.width = Cartesian3.distance(
+        depthIntersection,
+        this.positionWC
+      );
+    } else if (defined(rayIntersection)) {
+      this.frustum.width = Cartesian3.distance(
+        rayIntersection,
+        this.positionWC
+      );
+    }
+  }
+
+  if (
+    !defined(globe) ||
+    (!defined(rayIntersection) && !defined(depthIntersection))
+  ) {
+    var distance = Math.max(this.positionCartographic.height, 0.0);
+    this.frustum.width = distance;
+  }
 };
 
 var scratchSetViewCartesian = new Cartesian3();
@@ -3840,15 +3853,19 @@ Camera.prototype.switchToOrthographicFrustum = function () {
     return;
   }
 
-  // This must be called before changing the frustum because it uses the previous
-  // frustum to reconstruct the world space position from the depth buffer.
-  var frustumWidth = calculateOrthographicFrustumWidth(this);
-
   var scene = this._scene;
   this.frustum = new OrthographicFrustum();
   this.frustum.aspectRatio =
     scene.drawingBufferWidth / scene.drawingBufferHeight;
-  this.frustum.width = frustumWidth;
+
+  // It doesn't matter what we set this to. The adjust below will correct the width based on the camera position.
+  this.frustum.width = Cartesian3.magnitude(this.position);
+
+  // Check the projection matrix. It will always be defined, but we need to force an off-center update.
+  var projectionMatrix = this.frustum.projectionMatrix;
+  if (defined(projectionMatrix)) {
+    this._adjustOrthographicFrustum(true);
+  }
 };
 
 /**
@@ -3868,6 +3885,116 @@ Camera.clone = function (camera, result) {
   result.frustum = camera.frustum.clone();
 
   return result;
+};
+
+Camera.prototype.pickObjectPosition = function (windowPosition) {
+  var scene = this._scene;
+  if (scene.mode !== SceneMode.MORPHING) {
+    var pickedObject = scene.pick(windowPosition);
+    if (scene.pickPositionSupported && defined(pickedObject)) {
+      var cartesian = scene.pickPosition(windowPosition);
+      return cartesian;
+    }
+  }
+};
+
+/**
+ * new add code 双击鼠标，相机到达所点位置,仅限3D视图中。
+ */
+Camera.prototype.flyToDoubleClick = function () {
+  var _sceneVar = this._scene;
+  var handler = new ScreenSpaceEventHandler(_sceneVar.canvas);
+  handler.setInputAction(function (event) {
+    var cameraPosition = _sceneVar.camera.position;
+    var _durationVar = 0.8;
+    var mode = _sceneVar.camera._mode;
+    if (mode === SceneMode.MORPHING) {
+      _sceneVar.completeMorph();
+    }
+    if (mode === SceneMode.SCENE3D) {
+      var earthPosition_3D = _sceneVar.camera.pickEllipsoid(
+        event.position,
+        _sceneVar.globe.ellipsoid
+      );
+
+      var ray = _sceneVar.camera.getPickRay(event.position, new Ray());
+      var pickResult = _sceneVar.pickFromRay(ray);
+      if (defined(earthPosition_3D) && defined(pickResult)) {
+        var rayPos = pickResult.position;
+        var rayLen = Cartesian3.distance(cameraPosition, rayPos);
+        var earLen = Cartesian3.distance(cameraPosition, earthPosition_3D);
+        if (rayLen < earLen) {
+          earthPosition_3D = rayPos;
+        }
+      } else if (!defined(earthPosition_3D) && defined(pickResult)) {
+        earthPosition_3D = pickResult.position;
+      } else if (!defined(earthPosition_3D) && !defined(pickResult)) {
+        return;
+      }
+
+      var earthR = Cartesian3.magnitude(earthPosition_3D);
+
+      //当前相机距离地表高度：
+      var camHeight = Cartesian3.magnitude(_sceneVar.camera.position) - earthR;
+      if (camHeight > 8000) {
+        camHeight *= 0.1;
+      } else if (camHeight > 800) {
+        camHeight = 800;
+      }
+
+      var destRate = camHeight > 3000 ? 0.3 : 0.5;
+      destRate *= Math.cos(_sceneVar.camera.pitch);
+      var destHeight = Cartesian3.magnitude(earthPosition_3D) + camHeight;
+      var destination = new Cartesian3();
+      destination = Cartesian3.normalize(earthPosition_3D, destination);
+      Cartesian3.multiplyByScalar(destination, destHeight, destination);
+
+      destination = {
+        x: destination.x + destRate * (cameraPosition.x - destination.x),
+        y: destination.y + destRate * (cameraPosition.y - destination.y),
+        z: destination.z + destRate * (cameraPosition.z - destination.z),
+      };
+
+      var maximumHeight_dest =
+        Cartesian3.magnitude(destination) - _sceneVar.globe.ellipsoid.r;
+      var maximumHeight_cam =
+        Cartesian3.magnitude(_sceneVar.camera.position) -
+        _sceneVar.globe.ellipsoid.r;
+
+      if (camHeight > 0) {
+        //飞到包围球
+        var offsetv = new HeadingPitchRange();
+        offsetv.range = camHeight;
+        offsetv.heading = _sceneVar.camera.heading;
+        offsetv.pitch = _sceneVar.camera.pitch;
+
+        var boundSphere = new BoundingSphere(earthPosition_3D, camHeight);
+        _sceneVar.camera.flyToBoundingSphere(boundSphere, {
+          duration: _durationVar,
+          maximumHeight:
+            maximumHeight_dest > maximumHeight_cam
+              ? maximumHeight_dest
+              : maximumHeight_cam,
+          offset: offsetv,
+        });
+      } else {
+        //飞到指定点
+        _sceneVar.camera.flyTo({
+          destination: destination,
+          duration: _durationVar,
+          maximumHeight:
+            maximumHeight_dest > maximumHeight_cam
+              ? maximumHeight_dest
+              : maximumHeight_cam,
+          orientation: {
+            heading: _sceneVar.camera.heading,
+            pitch: _sceneVar.camera.pitch,
+            roll: _sceneVar.camera.roll,
+          },
+        });
+      }
+    }
+  }, ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 };
 
 /**

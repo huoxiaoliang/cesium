@@ -1982,6 +1982,9 @@ function rotate3D(
   var oldAxis = camera.constrainedAxis;
   if (defined(constrainedAxis)) {
     camera.constrainedAxis = constrainedAxis;
+  } else {
+  /**new add code 起始点没有落在地面上，直接返回 */
+    return;
   }
 
   var rho = Cartesian3.magnitude(camera.position);
@@ -2046,14 +2049,16 @@ function pan3D(controller, startPosition, movement, ellipsoid) {
   var p1 = camera.pickEllipsoid(endMousePosition, ellipsoid, pan3DP1);
 
   if (!defined(p0) || !defined(p1)) {
-    controller._rotating = true;
-    rotate3D(controller, startPosition, movement);
+    /**new add code 当平移的起止点不完整的时候，不做任何平移或旋转 */
+    //controller._rotating = true;
+    //rotate3D(controller, startPosition, movement);
+
     return;
   }
 
   p0 = camera.worldToCameraCoordinates(p0, p0);
   p1 = camera.worldToCameraCoordinates(p1, p1);
-
+  /*
   if (!defined(camera.constrainedAxis)) {
     Cartesian3.normalize(p0, p0);
     Cartesian3.normalize(p1, p1);
@@ -2135,6 +2140,20 @@ function pan3D(controller, startPosition, movement, ellipsoid) {
 
     camera.rotateRight(deltaPhi);
     camera.rotateUp(deltaTheta);
+  }*/
+  /**new add code 新加平移，按起止点直接平移*/
+  Cartesian3.normalize(p0, p0);
+  Cartesian3.normalize(p1, p1);
+  var dot = Cartesian3.dot(p0, p1);
+  var axis = Cartesian3.cross(p0, p1, pan3DTemp0);
+
+  if (
+    dot < 1.0 &&
+    !Cartesian3.equalsEpsilon(axis, Cartesian3.ZERO, CesiumMath.EPSILON14)
+  ) {
+    // dot is in [0, 1]
+    var angle = Math.acos(dot);
+    camera.rotate(axis, angle);
   }
 }
 

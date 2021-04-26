@@ -312,7 +312,7 @@ function cloc() {
 }
 
 gulp.task("cloc", gulp.series("clean", cloc));
-
+// 既不压缩优化，也不去掉调试信息
 function combine() {
   var outputDirectory = path.join("Build", "CesiumUnminified");
   return combineJavaScript({
@@ -333,7 +333,7 @@ function combineRelease() {
     outputDirectory: outputDirectory,
   });
 }
-
+// 不进行压缩优化，但是去掉了调试信息
 gulp.task("combineRelease", gulp.series("build", combineRelease));
 
 //Builds the documentation
@@ -427,7 +427,7 @@ gulp.task(
       .pipe(gulp.dest("."));
   })
 );
-
+// 压缩优化js代码，但是不会去掉调试信息。
 gulp.task(
   "minify",
   gulp.series("build", function () {
@@ -441,12 +441,12 @@ gulp.task(
 
 function minifyRelease() {
   return combineJavaScript({
-    removePragmas: true,
+    removePragmas: true, // 删除源码中的调试信息
     optimizer: "uglify2",
     outputDirectory: path.join("Build", "Cesium"),
   });
 }
-
+// 压缩优化js代码，去掉调试信息。
 gulp.task("minifyRelease", gulp.series("build", minifyRelease));
 
 function isTravisPullRequest() {

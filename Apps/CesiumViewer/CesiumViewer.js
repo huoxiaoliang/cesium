@@ -15,6 +15,19 @@ import {
   Viewer,
   viewerCesiumInspectorMixin,
   viewerDragDropMixin,
+  Ion,
+  GeometryAttribute,
+  ComponentDatatype,
+  Geometry,
+  PrimitiveType,
+  BoundingSphere,
+  MaterialAppearance,
+  Material,
+  Primitive,
+  GeometryInstance,
+  HeadingPitchRange,
+  CesiumTerrainProvider,
+  IonResource,
 } from "../../Source/Cesium.js";
 
 function main() {
@@ -37,6 +50,8 @@ function main() {
                            [height,heading,pitch,roll] default is looking straight down, [300,0,-90,0]
        saveCamera=false    Don't automatically update the camera view in the URL when it changes.
      */
+  Ion.defaultAccessToken =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwMWEyMzI3MC1hZTY5LTQ0MGQtYmI5Yy03NGM5MmRlOWNmOWMiLCJpZCI6MTUwMDMsInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1NzAwMDYxMTV9.BqLRq1M9Ip9dkwiqnfz7kVacTgTnNwmj0qAwjGnTGDc";
   var endUserOptions = queryToObject(window.location.search.substring(1));
 
   var imageryProvider;
@@ -49,21 +64,21 @@ function main() {
   var loadingIndicator = document.getElementById("loadingIndicator");
   var viewer;
   try {
-    var hasBaseLayerPicker = !defined(imageryProvider);
+    var hasBaseLayerPicker = false;
     viewer = new Viewer("cesiumContainer", {
       imageryProvider: imageryProvider,
-      baseLayerPicker: hasBaseLayerPicker,
+      baseLayerPicker: false,
       scene3DOnly: endUserOptions.scene3DOnly,
       requestRenderMode: true,
     });
-
+    console.log(viewer);
     if (hasBaseLayerPicker) {
       var viewModel = viewer.baseLayerPicker.viewModel;
       viewModel.selectedTerrain = viewModel.terrainProviderViewModels[1];
     } else {
-      viewer.terrainProvider = createWorldTerrain({
+      viewer.terrainProvider = new CesiumTerrainProvider({
+        url: IonResource.fromAssetId(1),
         requestWaterMask: true,
-        requestVertexNormals: true,
       });
     }
   } catch (exception) {
@@ -94,6 +109,8 @@ function main() {
   });
 
   var scene = viewer.scene;
+  viewer.scene.camera.flyToDoubleClick();
+  window.viewer = viewer;
   var context = scene.context;
   if (endUserOptions.debug) {
     context.validateShaderProgram = true;
