@@ -13,7 +13,7 @@ import yargs from "yargs";
 const argv = yargs(process.argv)
   .options({
     port: {
-      default: 8080,
+      default: 8000,
       description: "Port to listen on.",
     },
     public: {
