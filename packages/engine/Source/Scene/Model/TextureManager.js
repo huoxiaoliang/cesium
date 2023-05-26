@@ -7,6 +7,7 @@ import PixelDatatype from "../../Renderer/PixelDatatype.js";
 import Texture from "../../Renderer/Texture.js";
 import TextureMinificationFilter from "../../Renderer/TextureMinificationFilter.js";
 import TextureWrap from "../../Renderer/TextureWrap.js";
+import TextureUniform from "./TextureUniform.js";
 
 /**
  * An object to manage loading textures
@@ -71,8 +72,11 @@ TextureManager.prototype.loadTexture2D = function (textureId, textureUniform) {
       id: textureId,
       textureUniform: textureUniform,
     });
-  } else {
+  } else if (textureUniform instanceof TextureUniform) {
     fetchTexture2D(this, textureId, textureUniform);
+  } else {
+    // 支持直接传递Texture类型
+    this._textures[textureId] = textureUniform;
   }
 };
 

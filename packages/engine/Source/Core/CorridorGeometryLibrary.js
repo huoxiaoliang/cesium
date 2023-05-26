@@ -208,6 +208,7 @@ const scratchBackwardProjection = new Cartesian3();
  * @private
  */
 CorridorGeometryLibrary.computePositions = function (params) {
+  const clampToGround = params.clampToGround;
   const granularity = params.granularity;
   const positions = params.positions;
   const ellipsoid = params.ellipsoid;
@@ -328,11 +329,23 @@ CorridorGeometryLibrary.computePositions = function (params) {
         );
         scaleArray2[0] = Cartesian3.clone(previousPos, scaleArray2[0]);
         scaleArray2[1] = Cartesian3.clone(center, scaleArray2[1]);
-        subdividedPositions = PolylinePipeline.generateArc({
-          positions: scaleArray2,
-          granularity: granularity,
-          ellipsoid: ellipsoid,
-        });
+        // 修改是否需要贴地
+        if (clampToGround) {
+          subdividedPositions = PolylinePipeline.generateArc({
+            positions: scaleArray2,
+            granularity: granularity,
+            ellipsoid: ellipsoid,
+          });
+        } else {
+          subdividedPositions = [
+            scaleArray2[0].x,
+            scaleArray2[0].y,
+            scaleArray2[0].z,
+            scaleArray2[1].x,
+            scaleArray2[1].y,
+            scaleArray2[1].z,
+          ];
+        }
         calculatedPositions = addShiftedPositions(
           subdividedPositions,
           left,
@@ -401,11 +414,23 @@ CorridorGeometryLibrary.computePositions = function (params) {
         );
         scaleArray2[0] = Cartesian3.clone(previousPos, scaleArray2[0]);
         scaleArray2[1] = Cartesian3.clone(center, scaleArray2[1]);
-        subdividedPositions = PolylinePipeline.generateArc({
-          positions: scaleArray2,
-          granularity: granularity,
-          ellipsoid: ellipsoid,
-        });
+        // 修改是否需要贴地
+        if (clampToGround) {
+          subdividedPositions = PolylinePipeline.generateArc({
+            positions: scaleArray2,
+            granularity: granularity,
+            ellipsoid: ellipsoid,
+          });
+        } else {
+          subdividedPositions = [
+            scaleArray2[0].x,
+            scaleArray2[0].y,
+            scaleArray2[0].z,
+            scaleArray2[1].x,
+            scaleArray2[1].y,
+            scaleArray2[1].z,
+          ];
+        }
         calculatedPositions = addShiftedPositions(
           subdividedPositions,
           left,
@@ -469,11 +494,23 @@ CorridorGeometryLibrary.computePositions = function (params) {
   normal = ellipsoid.geodeticSurfaceNormal(position, normal);
   scaleArray2[0] = Cartesian3.clone(previousPos, scaleArray2[0]);
   scaleArray2[1] = Cartesian3.clone(position, scaleArray2[1]);
-  subdividedPositions = PolylinePipeline.generateArc({
-    positions: scaleArray2,
-    granularity: granularity,
-    ellipsoid: ellipsoid,
-  });
+  // 修改是否需要贴地
+  if (clampToGround) {
+    subdividedPositions = PolylinePipeline.generateArc({
+      positions: scaleArray2,
+      granularity: granularity,
+      ellipsoid: ellipsoid,
+    });
+  } else {
+    subdividedPositions = [
+      scaleArray2[0].x,
+      scaleArray2[0].y,
+      scaleArray2[0].z,
+      scaleArray2[1].x,
+      scaleArray2[1].y,
+      scaleArray2[1].z,
+    ];
+  }
   calculatedPositions = addShiftedPositions(
     subdividedPositions,
     left,

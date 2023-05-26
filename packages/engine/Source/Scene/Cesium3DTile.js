@@ -245,6 +245,8 @@ function Cesium3DTile(tileset, baseResource, header, parent) {
       contentState = Cesium3DTileContentState.UNLOADED;
       contentResource = baseResource.getDerivedResource({
         url: contentHeaderUri,
+        retryCallback: baseResource.retryCallback,
+        retryAttempts: baseResource.retryAttempts,
       });
       serverKey = RequestScheduler.getServerKey(
         contentResource.getUrlComponent()
@@ -2004,8 +2006,8 @@ function updateContent(tile, tileset, frameState) {
  *  - clipping function (union v. intersection)
 
  * @private
- * @param {Cesium3DTile} tile 
- * @param {Cesium3DTileset} tileset 
+ * @param {Cesium3DTile} tile
+ * @param {Cesium3DTileset} tileset
  */
 function updateClippingPlanes(tile, tileset) {
   const clippingPlanes = tileset.clippingPlanes;

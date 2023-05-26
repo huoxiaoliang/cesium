@@ -25,6 +25,8 @@ function createUniform(gl, activeUniform, uniformName, location) {
       return new UniformFloatVec4(gl, activeUniform, uniformName, location);
     case gl.SAMPLER_2D:
     case gl.SAMPLER_CUBE:
+    case gl.SAMPLER_3D:
+    case gl.SAMPLER_2D_ARRAY:
       return new UniformSampler(gl, activeUniform, uniformName, location);
     case gl.INT:
     case gl.BOOL:

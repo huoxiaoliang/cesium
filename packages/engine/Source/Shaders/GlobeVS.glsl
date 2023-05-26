@@ -46,6 +46,63 @@ out vec3 v_atmosphereMieColor;
 out float v_atmosphereOpacity;
 #endif
 
+#ifdef APPLY_FLAT
+uniform bool u_mars_flat_enabled;
+uniform int u_mars_flat_AreaWidth;
+uniform int u_mars_flat_AreaHeight;
+uniform highp float u_mars_inverseTileWidth;
+uniform highp vec2 u_mars_cartographicTileRectangle;
+uniform highp sampler2D u_mars_flat_AreaTexture;
+const float invalidValue = 8654238.5581; // 设置无效值
+vec4 getRegions(int x, int y) {
+    float u = (float(x) + 0.5) / float(u_mars_flat_AreaHeight);
+    float v = (float(y) + 0.5) / float(u_mars_flat_AreaWidth);
+    vec4 point = texture(u_mars_flat_AreaTexture, vec2(u, v));
+    float newX = (point.x - u_mars_cartographicTileRectangle.x) * u_mars_inverseTileWidth;
+    float newY = (point.y - u_mars_cartographicTileRectangle.y) * u_mars_inverseTileWidth;
+    return vec4(newX, newY, point.z, point.w);
+}
+
+float inRectangle(vec2 textureCoordinates) {
+    for(int h = 0; h < 100000; h++){
+        if(h >= u_mars_flat_AreaWidth) break;
+        vec4 first = getRegions(0, h);
+        float currentLength = first.z;
+        float height = first.w;
+        float counter = 0.0;
+        float xinters = 0.0;
+        for(int w = 0; w < 100000; w++){
+            if(float(w) >= currentLength) break;
+            int nextIndex = w + 1;
+            nextIndex = float(nextIndex) == currentLength ? 0 : nextIndex;
+            vec4 px = getRegions(w, h);
+            vec4 py = getRegions(nextIndex, h);
+            vec2 p1 = px.xy;
+            vec2 p2 = py.xy;
+            if(textureCoordinates.x > min(p1.x, p2.x) && textureCoordinates.x <= max(p1.x, p2.x)){
+              if (textureCoordinates.y <= max(p1.y, p2.y)){
+                if (p1.x != p2.x){
+                  xinters = ((textureCoordinates.x - p1.x) * (p2.y - p1.y)) / (p2.x - p1.x) + p1.y;
+                  if (p1.y == p2.y || textureCoordinates.y <= xinters)
+                  {
+                    counter += 1.0;
+                  }
+                }
+              }
+            }
+
+        }
+        if((mod(counter, 2.0) != 0.0)) {
+            return height;
+        }
+    }
+
+    return invalidValue;
+}
+#endif
+
+
+
 // These functions are generated at runtime.
 vec4 getPosition(vec3 position, float height, vec2 textureCoordinates);
 float get2DYPositionFraction(vec2 textureCoordinates);
@@ -187,6 +244,19 @@ void main()
     height = newHeight;
 #endif
 
+#if defined(APPLY_FLAT)
+      //地形压平
+    if(u_mars_flat_enabled){
+        float isInside = inRectangle(textureCoordinates);
+        if(isInside != invalidValue){
+            vec3 offset = (isInside - height) * ellipsoidNormal;
+            position += offset;
+            position3DWC += offset;
+            height = isInside;
+        }
+    }
+    // 地形压平
+#endif
     gl_Position = getPosition(position, height, textureCoordinates);
 
     v_positionEC = (u_modifiedModelView * vec4(position, 1.0)).xyz;

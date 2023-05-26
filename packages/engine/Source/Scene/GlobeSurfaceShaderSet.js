@@ -3,6 +3,7 @@ import destroyObject from "../Core/destroyObject.js";
 import TerrainQuantization from "../Core/TerrainQuantization.js";
 import ShaderProgram from "../Renderer/ShaderProgram.js";
 import getClippingFunction from "./getClippingFunction.js";
+import getMultiClippingFunction from "./getMultiClippingFunction.js";
 import SceneMode from "./SceneMode.js";
 
 function GlobeSurfaceShader(
@@ -10,13 +11,15 @@ function GlobeSurfaceShader(
   flags,
   material,
   shaderProgram,
-  clippingShaderState
+  clippingShaderState,
+  multiClippingShaderState
 ) {
   this.numberOfDayTextures = numberOfDayTextures;
   this.flags = flags;
   this.material = material;
   this.shaderProgram = shaderProgram;
   this.clippingShaderState = clippingShaderState;
+  this.multiClippingShaderState = multiClippingShaderState;
 }
 
 /**
@@ -104,10 +107,13 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
   const hasExaggeration = options.hasExaggeration;
   const showUndergroundColor = options.showUndergroundColor;
   const translucent = options.translucent;
-
+  const multiClippingPlanes = options.multiClippingPlanes;
+  const enableMultiClippingPlanes =
+    defined(multiClippingPlanes) && multiClippingPlanes.length > 0;
+  const crcOptions = options.crcOptions || {};
   let quantization = 0;
   let quantizationDefine = "";
-
+  const isStain = options.isStain ?? false;
   const mesh = surfaceTile.renderedMesh;
   const terrainEncoding = mesh.encoding;
   const quantizationMode = terrainEncoding.quantization;
@@ -161,7 +167,8 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
     (hasExaggeration << 27) |
     (showUndergroundColor << 28) |
     (translucent << 29) |
-    (applyDayNightAlpha << 30);
+    (applyDayNightAlpha << 30) |
+    (enableMultiClippingPlanes << 31);
 
   let currentClippingShaderState = 0;
   if (defined(clippingPlanes) && clippingPlanes.length > 0) {
@@ -170,12 +177,19 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
       : 0;
   }
   let surfaceShader = surfaceTile.surfaceShader;
+
+  let currentMultiClippingShaderState = 0;
+  if (enableMultiClippingPlanes) {
+    currentMultiClippingShaderState = multiClippingPlanes.collectionsState;
+  }
+
   if (
     defined(surfaceShader) &&
     surfaceShader.numberOfDayTextures === numberOfDayTextures &&
     surfaceShader.flags === flags &&
     surfaceShader.material === this.material &&
-    surfaceShader.clippingShaderState === currentClippingShaderState
+    surfaceShader.clippingShaderState === currentClippingShaderState &&
+    surfaceShader.multiClippingShaderState === currentMultiClippingShaderState
   ) {
     return surfaceShader.shaderProgram;
   }
@@ -190,7 +204,8 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
   if (
     !defined(surfaceShader) ||
     surfaceShader.material !== this.material ||
-    surfaceShader.clippingShaderState !== currentClippingShaderState
+    surfaceShader.clippingShaderState !== currentClippingShaderState ||
+    surfaceShader.multiClippingShaderState !== currentMultiClippingShaderState
   ) {
     // Cache miss - we've never seen this combination of numberOfDayTextures and flags before.
     const vs = this.baseVertexShaderSource.clone();
@@ -201,7 +216,26 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
         getClippingFunction(clippingPlanes, frameState.context)
       ); // Need to go before GlobeFS
     }
-
+    if (isStain) {
+      fs.defines.push("STAIN_PATTERN");
+    }
+    if (
+      currentMultiClippingShaderState !== 0 &&
+      currentClippingShaderState === 0
+    ) {
+      fs.sources.unshift(
+        getMultiClippingFunction(multiClippingPlanes, frameState.context)
+      );
+    }
+    if (crcOptions.enableClip) {
+      fs.defines.push("APPLY_TAILOR");
+    }
+    if (crcOptions.enableUplift) {
+      fs.defines.push("APPLY_UPLIFT");
+    }
+    if (crcOptions.enableFlat) {
+      vs.defines.push("APPLY_FLAT");
+    }
     vs.defines.push(quantizationDefine);
     fs.defines.push(
       `TEXTURE_UNITS ${numberOfDayTextures}`,
@@ -223,6 +257,12 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
     }
     if (applyGamma) {
       fs.defines.push("APPLY_GAMMA");
+    }
+    if (crcOptions.invertColor) {
+      fs.defines.push("APPLY_INVERT_COLOR_CRC3D");
+    }
+    if (crcOptions.filterColor) {
+      fs.defines.push("APPLY_FILTER_COLOR_CRC3D");
     }
     if (applyAlpha) {
       fs.defines.push("APPLY_ALPHA");
@@ -292,6 +332,10 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
       fs.defines.push("ENABLE_CLIPPING_PLANES");
     }
 
+    if (enableMultiClippingPlanes) {
+      fs.defines.push("ENABLE_MULTI_CLIPPING_PLANES");
+    }
+
     if (colorCorrect) {
       fs.defines.push("COLOR_CORRECT");
     }
@@ -307,7 +351,6 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
     if (hasExaggeration) {
       vs.defines.push("EXAGGERATION");
     }
-
     let computeDayColor =
       "\
     vec4 computeDayColor(vec4 initialColor, vec3 textureCoordinates, float nightBlend)\n\
@@ -345,6 +388,17 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
             ${applyHue ? `u_dayTextureHue[${i}]` : "0.0"},\n\
             ${applySaturation ? `u_dayTextureSaturation[${i}]` : "0.0"},\n\
             ${applyGamma ? `u_dayTextureOneOverGamma[${i}]` : "0.0"},\n\
+            ${
+              crcOptions.invertColor
+                ? `u_crc3dTextureInvertColor[${i}]`
+                : "false"
+            },\n\
+            ${
+              crcOptions.filterColor
+                ? `u_crc3dTextureFilterColor[${i}]`
+                : "vec3(1.0)"
+            },\n\
+            ${isStain ? `u_layers[${i}]` : "0.0"},\n\
             ${applySplit ? `u_dayTextureSplit[${i}]` : "0.0"},\n\
             ${colorToAlpha ? `u_colorsToAlpha[${i}]` : "vec4(0.0)"},\n\
         nightBlend\
@@ -377,7 +431,8 @@ GlobeSurfaceShaderSet.prototype.getShaderProgram = function (options) {
       flags,
       this.material,
       shader,
-      currentClippingShaderState
+      currentClippingShaderState,
+      currentMultiClippingShaderState
     );
   }
 

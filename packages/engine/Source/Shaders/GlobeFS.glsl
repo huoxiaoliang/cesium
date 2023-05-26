@@ -1,10 +1,17 @@
 uniform vec4 u_initialColor;
+#ifdef APPLY_TAILOR
+uniform sampler2D u_tailorArea;
+uniform bool u_enableTailor;
+uniform bool u_showTailorOnly;
+uniform mat4 u_invertTailorCenterMatrix;
+uniform vec4 u_tailorRect;
+#endif
 
 #if TEXTURE_UNITS > 0
 uniform sampler2D u_dayTextures[TEXTURE_UNITS];
 uniform vec4 u_dayTextureTranslationAndScale[TEXTURE_UNITS];
 uniform bool u_dayTextureUseWebMercatorT[TEXTURE_UNITS];
-
+uniform float u_layers[TEXTURE_UNITS];
 #ifdef APPLY_ALPHA
 uniform float u_dayTextureAlpha[TEXTURE_UNITS];
 #endif
@@ -36,6 +43,14 @@ uniform float u_dayTextureSaturation[TEXTURE_UNITS];
 
 #ifdef APPLY_GAMMA
 uniform float u_dayTextureOneOverGamma[TEXTURE_UNITS];
+#endif
+
+#ifdef APPLY_INVERT_COLOR_CRC3D
+uniform bool u_crc3dTextureInvertColor[TEXTURE_UNITS];
+#endif
+
+#ifdef APPLY_FILTER_COLOR_CRC3D
+uniform vec3 u_crc3dTextureFilterColor[TEXTURE_UNITS];
 #endif
 
 #ifdef APPLY_IMAGERY_CUTOUT
@@ -71,10 +86,14 @@ uniform vec4 u_cartographicLimitRectangle;
 uniform vec2 u_nightFadeDistance;
 #endif
 
-#ifdef ENABLE_CLIPPING_PLANES
+#if defined(ENABLE_CLIPPING_PLANES) || defined(ENABLE_MULTI_CLIPPING_PLANES)
 uniform highp sampler2D u_clippingPlanes;
 uniform mat4 u_clippingPlanesMatrix;
 uniform vec4 u_clippingPlanesEdgeStyle;
+#endif
+
+#ifdef ENABLE_MULTI_CLIPPING_PLANES
+uniform mediump sampler2D u_multiClippingPlanesLength;
 #endif
 
 #if defined(GROUND_ATMOSPHERE) || defined(FOG) && defined(DYNAMIC_ATMOSPHERE_LIGHTING) && (defined(ENABLE_VERTEX_LIGHTING) || defined(ENABLE_DAYNIGHT_SHADING))
@@ -139,6 +158,64 @@ float interpolateByDistance(vec4 nearFarScalar, float distance)
 }
 #endif
 
+#ifdef APPLY_UPLIFT
+// 地形抬升与基于像素开挖
+uniform int u_mars_uplift_RectangleWidth;
+uniform int u_mars_uplift_RectangleHeight;
+uniform highp sampler2D u_mars_uplift_RampRectangle;
+uniform float u_mars_inverseTileWidth;
+uniform vec2 u_mars_cartographicTileRectangle;
+uniform bool u_mars_uplift_enabled;
+uniform bool u_mars_uplift_hideInsideOrOutside;
+
+vec4 getRegions(int x, int y) {
+    float u = (float(x) + 0.5) / float(u_mars_uplift_RectangleHeight);
+    float v = (float(y) + 0.5) / float(u_mars_uplift_RectangleWidth);
+    vec4 point = texture(u_mars_uplift_RampRectangle, vec2(u, v));
+    float newX = (point.x - u_mars_cartographicTileRectangle.x) * u_mars_inverseTileWidth;
+    float newY = (point.y - u_mars_cartographicTileRectangle.y) * u_mars_inverseTileWidth;
+    return vec4(newX, newY, point.z, 0.0);
+}
+
+bool inSlopeRampRectangle() {
+    for(int h = 0; h < 100000; h++){
+        if(h >= u_mars_uplift_RectangleWidth) break;
+
+        vec4 first = getRegions(0, h);
+        float currentLength = first.z;
+        float counter = 0.0;
+        float xinters = 0.0;
+        for(int w = 0; w < 100000; w++){
+            if(float(w) >= currentLength) break;
+            int nextIndex = w + 1;
+            nextIndex = float(nextIndex) == currentLength ? 0 : nextIndex;
+            vec4 px = getRegions(w, h);
+            vec4 py = getRegions(nextIndex, h);
+            vec2 p1 = px.xy;
+            vec2 p2 = py.xy;
+            if(v_textureCoordinates.x > min(p1.x, p2.x) && v_textureCoordinates.x <= max(p1.x, p2.x)){
+              if (v_textureCoordinates.y <= max(p1.y, p2.y)){
+                if (p1.x != p2.x){
+                  xinters = ((v_textureCoordinates.x - p1.x) * (p2.y - p1.y)) / (p2.x - p1.x) + p1.y;
+                  if (p1.y == p2.y || v_textureCoordinates.y <= xinters)
+                  {
+                    counter += 1.0;
+                  }
+                }
+              }
+            }
+
+        }
+        if((mod(counter, 2.0) != 0.0)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+//地形抬升
+#endif
+
 #if defined(UNDERGROUND_COLOR) || defined(TRANSLUCENT) || defined(APPLY_MATERIAL)
 vec4 alphaBlend(vec4 sourceColor, vec4 destinationColor)
 {
@@ -157,6 +234,64 @@ bool inTranslucencyRectangle()
 }
 #endif
 
+#ifdef STAIN_PATTERN
+uniform vec4 u_uvRange;
+uniform vec2 u_stainRang;
+uniform sampler2D u_colorClamp;
+uniform vec2 u_colorRange;
+uniform vec2 u_displayRange;
+uniform float u_single;
+vec3 bilinear(const vec2 uv, sampler2D stainTexture, vec2 stainRang) {
+    vec2 px = 1.0 / stainRang;
+    vec2 vc = (floor(uv * stainRang)) * px;
+    vec2 f = fract(uv * stainRang);
+    vec4 tl = texture(stainTexture, vc).rgba;
+    vec4 tr = texture(stainTexture, vc + vec2(px.x, 0)).rgba;
+    vec4 bl = texture(stainTexture, vc + vec2(0, px.y)).rgba;
+    vec4 br = texture(stainTexture, vc + px).rgba;
+    float x = mix(mix(tl.x, tr.x, f.x), mix(bl.x, br.x, f.x), f.y);
+    float y = mix(mix(tl.y, tr.y, f.x), mix(bl.y, br.y, f.x), f.y);
+    float alpha = mix(mix(tl.w, tr.w, f.x), mix(bl.w, br.w, f.x), f.y);
+    return vec3(x, y, alpha);
+}
+vec2 getValue(const vec2 uv, sampler2D stainTexture, vec4 uvRange, vec2 stainRang, float usingle) {
+    float umin = uvRange.x;
+    float umax = uvRange.y;
+    float vmin = uvRange.z;
+    float vmax = uvRange.w;
+    vec3 rg = bilinear(uv, stainTexture, stainRang);
+    float u = rg.x * (umax - umin) + umin;
+    float v = rg.y * (vmax - vmin) + vmin;
+    float a = rg.z;
+    if (usingle == 1.0) {
+        return vec2(u, a);
+    } else {
+        return vec2(length(vec2(u, v)), a);
+    }
+}
+vec4 stainPatternColor(vec2 uv, sampler2D stainTexture, vec4 uvRange, vec2 stainRang, sampler2D colorClamp, vec2 colorRange, vec2 displayRange, float usingle) {
+    vec2 v_a = getValue(uv, stainTexture, uvRange, stainRang, usingle);
+    float value = v_a.x;
+    float alpha = v_a.y;
+    float value_t = (value - colorRange.x) / (colorRange.y - colorRange.x);
+    vec2 ramp_pos = vec2(fract(16.0 * value_t), floor(16.0 * value_t) / 16.0);
+    if (value_t > 1.0) {
+        ramp_pos = vec2(1.0, 1.0);
+    }
+    vec4 color = texture(colorClamp, ramp_pos);
+    bool display = value <= displayRange.y && value >= displayRange.x;
+    if (display) {
+        if (alpha == 0.0) {
+            return vec4(0.0, 0.0, 0.0, 0.0);
+        } else {
+            return color * alpha;
+        }
+    } else {
+        return vec4(0.0, 0.0, 0.0, 0.0);
+    }
+}
+#endif
+
 vec4 sampleAndBlend(
     vec4 previousColor,
     sampler2D textureToSample,
@@ -171,6 +306,9 @@ vec4 sampleAndBlend(
     float textureHue,
     float textureSaturation,
     float textureOneOverGamma,
+    bool textureInvertColor,
+    vec3 texturefilterColor,
+    float isStain,
     float split,
     vec4 colorToAlpha,
     float nightBlend)
@@ -195,7 +333,16 @@ vec4 sampleAndBlend(
     vec2 translation = textureCoordinateTranslationAndScale.xy;
     vec2 scale = textureCoordinateTranslationAndScale.zw;
     vec2 textureCoordinates = tileTextureCoordinates * scale + translation;
-    vec4 value = texture(textureToSample, textureCoordinates);
+    vec4 value = vec4(0.0,0.0,0.0,0.0);
+    #ifdef STAIN_PATTERN
+    if (isStain == 1.0) {
+      value = stainPatternColor(textureCoordinates, textureToSample, u_uvRange, u_stainRang, u_colorClamp, u_colorRange, u_displayRange, u_single);
+    } else {
+      value = texture(textureToSample, textureCoordinates);
+    }
+    #else
+      value = texture(textureToSample, textureCoordinates);
+    #endif
     vec3 color = value.rgb;
     float alpha = value.a;
 
@@ -239,6 +386,22 @@ vec4 sampleAndBlend(
 
 #ifdef APPLY_SATURATION
     color = czm_saturation(color, textureSaturation);
+#endif
+
+#ifdef APPLY_INVERT_COLOR_CRC3D
+if (textureInvertColor) {
+    color.r = 1.0 - color.r;
+    color.g = 1.0 - color.g;
+    color.b = 1.0 - color.b;
+}
+#endif
+
+#ifdef APPLY_FILTER_COLOR_CRC3D
+if (texturefilterColor.x!=1.0&&texturefilterColor.y!=1.0&&texturefilterColor.z!=1.0) {
+    color.r = color.r * texturefilterColor.x;
+    color.g = color.g * texturefilterColor.y;
+    color.b = color.b * texturefilterColor.z;
+}
 #endif
 
     float sourceAlpha = alpha * textureAlpha;
@@ -316,6 +479,10 @@ void main()
 
 #ifdef ENABLE_CLIPPING_PLANES
     float clipDistance = clip(gl_FragCoord, u_clippingPlanes, u_clippingPlanesMatrix);
+#endif
+
+#ifdef ENABLE_MULTI_CLIPPING_PLANES
+    float clipDistance = clip(gl_FragCoord, u_clippingPlanes, u_clippingPlanesMatrix, u_multiClippingPlanesLength);
 #endif
 
 #if defined(SHOW_REFLECTIVE_OCEAN) || defined(ENABLE_DAYNIGHT_SHADING) || defined(HDR)
@@ -396,7 +563,7 @@ void main()
     materialInput.st = v_textureCoordinates.st;
     materialInput.normalEC = normalize(v_normalEC);
     materialInput.positionToEyeEC = -v_positionEC;
-    materialInput.tangentToEyeMatrix = czm_eastNorthUpToEyeCoordinates(v_positionMC, normalize(v_normalEC));     
+    materialInput.tangentToEyeMatrix = czm_eastNorthUpToEyeCoordinates(v_positionMC, normalize(v_normalEC));
     materialInput.slope = v_slope;
     materialInput.height = v_height;
     materialInput.aspect = v_aspect;
@@ -416,7 +583,7 @@ void main()
     vec4 finalColor = color;
 #endif
 
-#ifdef ENABLE_CLIPPING_PLANES
+#if defined(ENABLE_CLIPPING_PLANES) || defined(ENABLE_MULTI_CLIPPING_PLANES)
     vec4 clippingPlanesEdgeColor = vec4(1.0);
     clippingPlanesEdgeColor.rgb = u_clippingPlanesEdgeStyle.rgb;
     float clippingPlanesEdgeWidth = u_clippingPlanesEdgeStyle.a;
@@ -442,7 +609,7 @@ void main()
     {
         bool dynamicLighting = false;
         #if defined(DYNAMIC_ATMOSPHERE_LIGHTING) && (defined(ENABLE_DAYNIGHT_SHADING) || defined(ENABLE_VERTEX_LIGHTING))
-            dynamicLighting = true;     
+            dynamicLighting = true;
         #endif
 
         vec3 rayleighColor;
@@ -480,18 +647,16 @@ void main()
         // Fog is applied to tiles selected for fog, close to the Earth.
         #ifdef FOG
             vec3 fogColor = groundAtmosphereColor.rgb;
-            
             // If there is lighting, apply that to the fog.
             #if defined(DYNAMIC_ATMOSPHERE_LIGHTING) && (defined(ENABLE_VERTEX_LIGHTING) || defined(ENABLE_DAYNIGHT_SHADING))
                 float darken = clamp(dot(normalize(czm_viewerPositionWC), atmosphereLightDirection), u_minimumBrightness, 1.0);
-                fogColor *= darken;                
+                fogColor *= darken;
             #endif
 
             #ifndef HDR
                 fogColor.rgb = czm_acesTonemapping(fogColor.rgb);
                 fogColor.rgb = czm_inverseGamma(fogColor.rgb);
             #endif
-            
             const float modifier = 0.15;
             finalColor = vec4(czm_fog(v_distance, finalColor.rgb, fogColor.rgb, modifier), finalColor.a);
 
@@ -507,20 +672,17 @@ void main()
             #if defined(DYNAMIC_ATMOSPHERE_LIGHTING) && (defined(ENABLE_VERTEX_LIGHTING) || defined(ENABLE_DAYNIGHT_SHADING))
                 float fadeInDist = u_nightFadeDistance.x;
                 float fadeOutDist = u_nightFadeDistance.y;
-            
                 float sunlitAtmosphereIntensity = clamp((cameraDist - fadeOutDist) / (fadeInDist - fadeOutDist), 0.05, 1.0);
                 float darken = clamp(dot(normalize(positionWC), atmosphereLightDirection), 0.0, 1.0);
                 vec3 darkenendGroundAtmosphereColor = mix(groundAtmosphereColor.rgb, finalAtmosphereColor.rgb, darken);
 
                 finalAtmosphereColor = mix(darkenendGroundAtmosphereColor, finalAtmosphereColor, sunlitAtmosphereIntensity);
             #endif
-            
             #ifndef HDR
                 finalAtmosphereColor.rgb = vec3(1.0) - exp(-fExposure * finalAtmosphereColor.rgb);
             #else
                 finalAtmosphereColor.rgb = czm_saturation(finalAtmosphereColor.rgb, 1.6);
             #endif
-            
             finalColor.rgb = mix(finalColor.rgb, finalAtmosphereColor.rgb, fade);
         #endif
     }
@@ -544,7 +706,35 @@ void main()
       finalColor.a *= interpolateByDistance(alphaByDistance, v_distance);
     }
 #endif
-    
+#ifdef APPLY_TAILOR
+   if(u_enableTailor)
+   {
+    vec4 tlpos = u_invertTailorCenterMatrix * vec4(v_positionMC, 1.0);
+    vec2 tuv = (tlpos.xy - u_tailorRect.xy) / u_tailorRect.zw;
+    vec4 tColor = texture(u_tailorArea, tuv);
+    if (!(tuv.x >= 0.0 && tuv.x <= 1.0 && tuv.y >= 0.0 && tuv.y <= 1.0) ||
+        (tColor.r < 0.5 && tColor.a < 0.5))
+    {
+      if (u_showTailorOnly) {
+        discard;
+      }
+    } else {
+      if (!u_showTailorOnly) {
+        discard;
+      }
+    }
+    }
+#endif
+
+#ifdef APPLY_UPLIFT
+// 地形抬升
+    if(u_mars_uplift_enabled){
+        bool isInSlopeRampRectangle = inSlopeRampRectangle();
+        if(isInSlopeRampRectangle == u_mars_uplift_hideInsideOrOutside) {
+            discard;
+        }
+    }
+#endif
     out_FragColor =  finalColor;
 }
 
