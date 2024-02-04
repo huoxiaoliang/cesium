@@ -264,6 +264,8 @@ function Cesium3DTile(tileset, baseResource, header, parent) {
       contentState = Cesium3DTileContentState.UNLOADED;
       contentResource = baseResource.getDerivedResource({
         url: contentHeaderUri,
+        retryCallback: baseResource.retryCallback,
+        retryAttempts: baseResource.retryAttempts,
       });
       serverKey = RequestScheduler.getServerKey(
         contentResource.getUrlComponent()

@@ -389,7 +389,7 @@ export const cloc = gulp.series(clean, clocSource);
 
 //Builds the documentation
 export function buildDocs() {
-  const generatePrivateDocumentation = argv.private ? "--private" : "";
+  const generatePrivateDocumentation = argv.private ? "--private" : "--private";
 
   execSync(
     `npx jsdoc --configure Tools/jsdoc/conf.json --pedantic ${generatePrivateDocumentation}`,
