@@ -1,7 +1,7 @@
-// eslint-disable-next-line no-undef
-window.CESIUM_BASE_URL = window.CESIUM_BASE_URL
-  ? window.CESIUM_BASE_URL
-  : "../../Build/CesiumUnminified/";
+if (window.CESIUM_BASE_URL === undefined) {
+  window.CESIUM_BASE_URL = "../../Build/CesiumUnminified/";
+  // window.CESIUM_BASE_URL = "../../Source/";
+}
 
 import {
   Cartesian3,
@@ -20,8 +20,24 @@ import {
   Viewer,
   viewerCesiumInspectorMixin,
   viewerDragDropMixin,
+  Ion,
+  Cesium3DTileset,
+  Color,
+  CorridorGeometry,
 } from "../../Build/CesiumUnminified/index.js";
 
+import * as Cesium from "../../Build/CesiumUnminified/index.js";
+import {
+  testImageClip,
+  testTextureClip,
+  clipTileset,
+  test,
+  testUpLift,
+} from "./testClip.js";
+
+import { makeVolume } from "./volume.js";
+import { makeStainLayer } from "./Stain/StainLayer.js";
+// } from "../../Source/js";
 async function main() {
   /*
      Options parsed from query string:
@@ -42,6 +58,10 @@ async function main() {
                            [height,heading,pitch,roll] default is looking straight down, [300,0,-90,0]
        saveCamera=false    Don't automatically update the camera view in the URL when it changes.
      */
+  window.Cesium = Cesium;
+  Ion.defaultAccessToken =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhMTE0MmQ1Ni1hZWY3LTRjOWItYTExNi0wZTgxOGQ2MDFmMDIiLCJpZCI6MjQ3MDUsInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1ODU2Mzc2Nzl9.HFkB6s3fXV8vqBN-ADu-nDf2Gu_Gy_PaYeM7CqXH3Eo";
+
   const endUserOptions = queryToObject(window.location.search.substring(1));
 
   let baseLayer;
@@ -55,7 +75,7 @@ async function main() {
   const hasBaseLayerPicker = !defined(baseLayer);
 
   const terrain = Terrain.fromWorldTerrain({
-    requestWaterMask: true,
+    requestWaterMask: false,
     requestVertexNormals: true,
   });
 
@@ -69,6 +89,11 @@ async function main() {
       terrain: terrain,
     });
 
+    // viewer.imageryLayers.get(0).filterColor = Color.fromCssColorString(
+    //   "#4e70a6"
+    // );
+    // viewer.imageryLayers.get(0).invertColor = true;
+    window.viewer = viewer;
     if (hasBaseLayerPicker) {
       const viewModel = viewer.baseLayerPicker.viewModel;
       viewModel.selectedTerrain = viewModel.terrainProviderViewModels[1];
@@ -240,6 +265,30 @@ async function main() {
   }
 
   loadingIndicator.style.display = "none";
+  viewer.camera.flyTo({
+    destination: Cartesian3.fromDegrees(116.416497, 30.934256, 775.89),
+    complete: () => {
+      //testImageClip(viewer);
+      //testUpLift(viewer);
+      // makeVolume(viewer);
+      // makeStainLayer(viewer);
+      clipTileset(viewer);
+    },
+  });
+  window.testTextureClip = testTextureClip;
+  // testTextureClip(viewer);
+  const t = new Cesium3DTileset({
+    url:
+      "http://192.168.1.158:8088/creatar3d-data/sjsw/pointCloud/right3/tileset.json",
+    // debugWireframe: true,
+    // enableDebugWireframe: true,
+
+    // url: "http://localhost:8080/creatar3d-data/niaochao0718/tileset.json",
+  });
+  // viewer.scene.primitives.add(t);
+  // viewer.flyTo(t);
+  // window.t = t;
+  // test(viewer);
 }
 
 main();
