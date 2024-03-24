@@ -42,3 +42,6 @@ yarn.lock
 .idea/shelf
 /CodeChange
 /copyCesiumLib.cjs
+
+# Used in the CLA checking GitHub workflow
+GoogleConfig.json
