@@ -260,9 +260,9 @@ async function requestMetadata(resource, imageryProviderBuilder) {
  *
  * Provides tiled imagery hosted by an ArcGIS MapServer.  By default, the server's pre-cached tiles are
  * used, if available.
- * 
+ *
  * <br/>
- * 
+ *
  * An {@link https://developers.arcgis.com/documentation/mapping-apis-and-services/security| ArcGIS Access Token } is required to authenticate requests to an ArcGIS Image Tile service.
  * To access secure ArcGIS resources, it's required to create an ArcGIS developer
  * account or an ArcGIS online account, then implement an authentication method to obtain an access token.
@@ -278,7 +278,7 @@ async function requestMetadata(resource, imageryProviderBuilder) {
  * @example
  * // Set the default access token for accessing ArcGIS Image Tile service
  * Cesium.ArcGisMapService.defaultAccessToken = "<ArcGIS Access Token>";
- * 
+ *
  * // Add a base layer from a default ArcGIS basemap
  * const viewer = new Cesium.Viewer("cesiumContainer", {
  *   baseLayer: Cesium.ImageryLayer.fromProviderAsync(
@@ -331,6 +331,9 @@ function ArcGisMapServerImageryProvider(options) {
   this._tileCredits = undefined;
 
   let credit = options.credit;
+  this._tolerance = options.tolerance || 2;
+  this._maxTolerance = options.maxTolerance || 2;
+  this._toleranceStep = options.toleranceStep || 2;
   if (typeof credit === "string") {
     credit = new Credit(credit);
   }
@@ -695,6 +698,21 @@ Object.defineProperties(ArcGisMapServerImageryProvider.prototype, {
       return this._layers;
     },
   },
+  tolerance: {
+    get: function () {
+      return this._tolerance;
+    },
+  },
+  maxTolerance: {
+    get: function () {
+      return this._maxTolerance;
+    },
+  },
+  toleranceStep: {
+    get: function () {
+      return this._toleranceStep;
+    },
+  },
 });
 
 /**
@@ -826,10 +844,94 @@ ArcGisMapServerImageryProvider.prototype.pickFeatures = function (
   if (defined(this._layers)) {
     layers += `:${this._layers}`;
   }
+  return this.queryFeatures(
+    horizontal,
+    vertical,
+    rectangle,
+    sr,
+    layers,
+    this.tolerance
+  );
+  // const query = {
+  //   f: "json",
+  //   tolerance: this.tolerance,
+  //   geometryType: "esriGeometryPoint",
+  //   geometry: `${horizontal},${vertical}`,
+  //   mapExtent: `${rectangle.west},${rectangle.south},${rectangle.east},${rectangle.north}`,
+  //   imageDisplay: `${this._tileWidth},${this._tileHeight},96`,
+  //   sr: sr,
+  //   layers: layers,
+  // };
 
+  // const resource = this._resource.getDerivedResource({
+  //   url: "identify",
+  //   queryParameters: query,
+  // });
+
+  // return resource.fetchJson().then(function (json) {
+  //   const result = [];
+
+  //   const features = json.results;
+  //   if (!defined(features)) {
+  //     if (this.maxTolerance > query.tolerance) {
+  //       return this.pickFeatures(rectangle, result, query.tolerance + 1);
+  //     }
+
+  //     return result;
+  //   }
+
+  //   for (let i = 0; i < features.length; ++i) {
+  //     const feature = features[i];
+
+  //     const featureInfo = new ImageryLayerFeatureInfo();
+  //     featureInfo.data = feature;
+  //     featureInfo.name = feature.value;
+  //     featureInfo.properties = feature.attributes;
+  //     featureInfo.configureDescriptionFromProperties(feature.attributes);
+
+  //     // If this is a point feature, use the coordinates of the point.
+  //     if (feature.geometryType === "esriGeometryPoint" && feature.geometry) {
+  //       const wkid =
+  //         feature.geometry.spatialReference &&
+  //         feature.geometry.spatialReference.wkid
+  //           ? feature.geometry.spatialReference.wkid
+  //           : 4326;
+  //       if (wkid === 4326 || wkid === 4283) {
+  //         featureInfo.position = Cartographic.fromDegrees(
+  //           feature.geometry.x,
+  //           feature.geometry.y,
+  //           feature.geometry.z
+  //         );
+  //       } else if (wkid === 102100 || wkid === 900913 || wkid === 3857) {
+  //         const projection = new WebMercatorProjection();
+  //         featureInfo.position = projection.unproject(
+  //           new Cartesian3(
+  //             feature.geometry.x,
+  //             feature.geometry.y,
+  //             feature.geometry.z
+  //           )
+  //         );
+  //       }
+  //     }
+
+  //     result.push(featureInfo);
+  //   }
+
+  //   return result;
+  // });
+};
+
+ArcGisMapServerImageryProvider.prototype.queryFeatures = function (
+  horizontal,
+  vertical,
+  rectangle,
+  sr,
+  layers,
+  tolerance
+) {
   const query = {
     f: "json",
-    tolerance: 2,
+    tolerance: tolerance,
     geometryType: "esriGeometryPoint",
     geometry: `${horizontal},${vertical}`,
     mapExtent: `${rectangle.west},${rectangle.south},${rectangle.east},${rectangle.north}`,
@@ -842,54 +944,70 @@ ArcGisMapServerImageryProvider.prototype.pickFeatures = function (
     url: "identify",
     queryParameters: query,
   });
+  return new Promise((resolve, reject) => {
+    resource.fetchJson().then((json) => {
+      const result = [];
 
-  return resource.fetchJson().then(function (json) {
-    const result = [];
-
-    const features = json.results;
-    if (!defined(features)) {
-      return result;
-    }
-
-    for (let i = 0; i < features.length; ++i) {
-      const feature = features[i];
-
-      const featureInfo = new ImageryLayerFeatureInfo();
-      featureInfo.data = feature;
-      featureInfo.name = feature.value;
-      featureInfo.properties = feature.attributes;
-      featureInfo.configureDescriptionFromProperties(feature.attributes);
-
-      // If this is a point feature, use the coordinates of the point.
-      if (feature.geometryType === "esriGeometryPoint" && feature.geometry) {
-        const wkid =
-          feature.geometry.spatialReference &&
-          feature.geometry.spatialReference.wkid
-            ? feature.geometry.spatialReference.wkid
-            : 4326;
-        if (wkid === 4326 || wkid === 4283) {
-          featureInfo.position = Cartographic.fromDegrees(
-            feature.geometry.x,
-            feature.geometry.y,
-            feature.geometry.z
-          );
-        } else if (wkid === 102100 || wkid === 900913 || wkid === 3857) {
-          const projection = new WebMercatorProjection();
-          featureInfo.position = projection.unproject(
-            new Cartesian3(
-              feature.geometry.x,
-              feature.geometry.y,
-              feature.geometry.z
+      const features = json.results;
+      if (!defined(features) || features.length === 0) {
+        if (this.maxTolerance > query.tolerance) {
+          tolerance = tolerance + this.toleranceStep;
+          resolve(
+            this.queryFeatures(
+              horizontal,
+              vertical,
+              rectangle,
+              sr,
+              layers,
+              tolerance
             )
           );
+        } else {
+          resolve(result);
         }
       }
 
-      result.push(featureInfo);
-    }
+      for (let i = 0; i < features.length; ++i) {
+        const feature = features[i];
 
-    return result;
+        const featureInfo = new ImageryLayerFeatureInfo();
+        featureInfo.data = feature;
+        featureInfo.name = feature.value;
+        featureInfo.properties = feature.attributes;
+        featureInfo.configureDescriptionFromProperties(feature.attributes);
+
+        // If this is a point feature, use the coordinates of the point.
+        if (feature.geometryType === "esriGeometryPoint" && feature.geometry) {
+          const wkid =
+            feature.geometry.spatialReference &&
+            feature.geometry.spatialReference.wkid
+              ? feature.geometry.spatialReference.wkid
+              : 4326;
+          if (wkid === 4326 || wkid === 4283) {
+            featureInfo.position = Cartographic.fromDegrees(
+              feature.geometry.x,
+              feature.geometry.y,
+              feature.geometry.z
+            );
+          } else if (wkid === 102100 || wkid === 900913 || wkid === 3857) {
+            const projection = new WebMercatorProjection();
+            featureInfo.position = projection.unproject(
+              new Cartesian3(
+                feature.geometry.x,
+                feature.geometry.y,
+                feature.geometry.z
+              )
+            );
+          }
+        }
+
+        result.push(featureInfo);
+      }
+
+      resolve(result);
+    });
   });
 };
+
 ArcGisMapServerImageryProvider._metadataCache = {};
 export default ArcGisMapServerImageryProvider;

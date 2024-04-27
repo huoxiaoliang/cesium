@@ -92,7 +92,7 @@ function clippingFunctionIntersect(arrayLength, maxLength) {
       { \n
         bool thisOneClipped = true; \n
         float thisCollectionClipAmount = 0.; \n
-        int thisCollectionLength = int(texture2D(multiClippingPlanesLength, vec2((float(i) + 0.5) / float(${arrayLength}), 0.5)).w); \n
+        int thisCollectionLength = int(texture(multiClippingPlanesLength, vec2((float(i) + 0.5) / float(${arrayLength}), 0.5)).w); \n
         for (int j = 0; j < ${maxLength}; ++j) \n
         { \n
           thisCollectionLength--; \n
@@ -136,7 +136,7 @@ function getClippingPlaneFloat(width, height) {
         int pixX = clippingPlaneNumber - (pixY * ${width}); \n
         float u = (float(pixX) + 0.5) * ${pixelWidthString}; \n  // sample from center of pixel
         float v = (float(pixY) + 0.5) * ${pixelHeightString}; \n
-        vec4 plane = texture2D(packedClippingPlanes, vec2(u, v)); \n
+        vec4 plane = texture(packedClippingPlanes, vec2(u, v)); \n
         return czm_transformPlane(plane, transform); \n
       } \n`;
   return functionString;
@@ -162,11 +162,11 @@ function getClippingPlaneUint8(width, height) {
       int pixX = clippingPlaneStartIndex - (pixY * ${width}); \n
       float u = (float(pixX) + 0.5) * ${pixelWidthString}; \n  // sample from center of pixel
       float v = (float(pixY) + 0.5) * ${pixelHeightString}; \n
-      vec4 oct32 = texture2D(packedClippingPlanes, vec2(u, v)) * 255.0; \n
+      vec4 oct32 = texture(packedClippingPlanes, vec2(u, v)) * 255.0; \n
       vec2 oct = vec2(oct32.x * 256.0 + oct32.y, oct32.z * 256.0 + oct32.w); \n
       vec4 plane; \n
       plane.xyz = czm_octDecode(oct, 65535.0); \n
-      plane.w = czm_unpackFloat(texture2D(packedClippingPlanes, vec2(u + ${pixelWidthString}, v))); \n
+      plane.w = czm_unpackFloat(texture(packedClippingPlanes, vec2(u + ${pixelWidthString}, v))); \n
       return czm_transformPlane(plane, transform); \n
     } \n`;
   return functionString;

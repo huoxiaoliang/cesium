@@ -146,16 +146,6 @@
   "engines": {
     "node": ">=14.0.0"
   },
-  "lint-staged": {
-    "*.{js,cjs,html}": [
-      "eslint --cache --quiet",
-      "prettier --write --no-config"
-    ],
-    "*.md": [
-      "markdownlint",
-      "prettier --write --no-config"
-    ]
-  },
   "workspaces": [
     "packages/engine",
     "packages/widgets"

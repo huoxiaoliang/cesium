@@ -2162,7 +2162,6 @@ function createWireframeVertexArray(context, vertexArray, terrainMesh) {
 let getDebugOrientedBoundingBox;
 let getDebugBoundingSphere;
 let debugDestroyPrimitive;
-
 (function () {
   const instanceOBB = new GeometryInstance({
     geometry: BoxOutlineGeometry.fromDimensions({
@@ -2300,7 +2299,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       tileCreditIndex < tileCreditLength;
       ++tileCreditIndex
     ) {
-      creditDisplay.addCredit(tileCredits[tileCreditIndex]);
+      creditDisplay.addCreditToNextFrame(tileCredits[tileCreditIndex]);
     }
   }
 
@@ -2406,7 +2405,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     frameState.verticalExaggerationRelativeHeight;
   if (isUplift && tileProvider.crcOptions.uplift) {
     exaggerationRelativeHeight =
-      frameState.terrainExaggerationRelativeHeight -
+      frameState.verticalExaggerationRelativeHeight -
       tileProvider.crcOptions.uplift.height / (exaggeration - 1);
   }
   const hasExaggeration = exaggeration !== 1.0;

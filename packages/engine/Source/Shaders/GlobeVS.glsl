@@ -47,7 +47,6 @@ out float v_atmosphereOpacity;
 #endif
 
 #ifdef APPLY_FLAT
-<<<<<<< HEAD
 uniform bool u_flat_enabled;
 uniform int u_flat_AreaWidth;
 uniform int u_flat_AreaHeight;
@@ -61,31 +60,12 @@ vec4 getRegions(int x, int y) {
     vec4 point = texture(u_flat_AreaTexture, vec2(u, v));
     float newX = (point.x - u_cartographicTileRectangle.x) * u_inverseTileWidth;
     float newY = (point.y - u_cartographicTileRectangle.y) * u_inverseTileWidth;
-=======
-uniform bool u_mars_flat_enabled;
-uniform int u_mars_flat_AreaWidth;
-uniform int u_mars_flat_AreaHeight;
-uniform highp float u_mars_inverseTileWidth;
-uniform highp vec2 u_mars_cartographicTileRectangle;
-uniform highp sampler2D u_mars_flat_AreaTexture;
-const float invalidValue = 8654238.5581; // 设置无效值
-vec4 getRegions(int x, int y) {
-    float u = (float(x) + 0.5) / float(u_mars_flat_AreaHeight);
-    float v = (float(y) + 0.5) / float(u_mars_flat_AreaWidth);
-    vec4 point = texture(u_mars_flat_AreaTexture, vec2(u, v));
-    float newX = (point.x - u_mars_cartographicTileRectangle.x) * u_mars_inverseTileWidth;
-    float newY = (point.y - u_mars_cartographicTileRectangle.y) * u_mars_inverseTileWidth;
->>>>>>> 24c9c6db4e157f506a9bbf00b2f31cb326664e05
     return vec4(newX, newY, point.z, point.w);
 }
 
 float inRectangle(vec2 textureCoordinates) {
     for(int h = 0; h < 100000; h++){
-<<<<<<< HEAD
         if(h >= u_flat_AreaWidth) break;
-=======
-        if(h >= u_mars_flat_AreaWidth) break;
->>>>>>> 24c9c6db4e157f506a9bbf00b2f31cb326664e05
         vec4 first = getRegions(0, h);
         float currentLength = first.z;
         float height = first.w;
@@ -266,11 +246,7 @@ void main()
 
 #if defined(APPLY_FLAT)
       //地形压平
-<<<<<<< HEAD
     if(u_flat_enabled){
-=======
-    if(u_mars_flat_enabled){
->>>>>>> 24c9c6db4e157f506a9bbf00b2f31cb326664e05
         float isInside = inRectangle(textureCoordinates);
         if(isInside != invalidValue){
             vec3 offset = (isInside - height) * ellipsoidNormal;
