@@ -758,13 +758,15 @@ function computePositionsExtruded(params, vertexFormat) {
   positions = PolygonPipeline.scaleToGeodeticHeight(
     positions,
     height,
-    ellipsoid
+    ellipsoid,
+    params.clampToGround
   );
   wallPositions = addWallPositions(positions, 0, wallPositions);
   extrudedPositions = PolygonPipeline.scaleToGeodeticHeight(
     extrudedPositions,
     extrudedHeight,
-    ellipsoid
+    ellipsoid,
+    params.clampToGround
   );
   wallPositions = addWallPositions(
     extrudedPositions,
@@ -1101,7 +1103,7 @@ function CorridorGeometry(options) {
   this._workerName = "createCorridorGeometry";
   this._offsetAttribute = options.offsetAttribute;
   this._rectangle = undefined;
-
+  this._clampToGround = defaultValue(options.clampToGround, true);
   /**
    * The number of elements used to pack the object into an array.
    * @type {number}
@@ -1278,8 +1280,9 @@ CorridorGeometry.createGeometry = function (corridorGeometry) {
   let positions = corridorGeometry._positions;
   const width = corridorGeometry._width;
   const ellipsoid = corridorGeometry._ellipsoid;
-
-  positions = scaleToSurface(positions, ellipsoid);
+  if (corridorGeometry._clampToGround) {
+    positions = scaleToSurface(positions, ellipsoid);
+  }
   const cleanPositions = arrayRemoveDuplicates(
     positions,
     Cartesian3.equalsEpsilon
@@ -1306,6 +1309,7 @@ CorridorGeometry.createGeometry = function (corridorGeometry) {
     cornerType: corridorGeometry._cornerType,
     granularity: corridorGeometry._granularity,
     saveAttributes: true,
+    clampToGround: corridorGeometry._clampToGround, // 添加是否贴地
   };
   let attr;
   if (extrude) {

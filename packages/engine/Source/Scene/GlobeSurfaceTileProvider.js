@@ -2300,7 +2300,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       tileCreditIndex < tileCreditLength;
       ++tileCreditIndex
     ) {
-      creditDisplay.addCreditToNextFrame(tileCredits[tileCreditIndex]);
+      creditDisplay.addCredit(tileCredits[tileCreditIndex]);
     }
   }
 

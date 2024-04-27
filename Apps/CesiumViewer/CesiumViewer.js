@@ -2,7 +2,6 @@ if (window.CESIUM_BASE_URL === undefined) {
   window.CESIUM_BASE_URL = "../../Build/CesiumUnminified/";
   // window.CESIUM_BASE_URL = "../../Source/";
 }
-
 import {
   Cartesian3,
   defined,
