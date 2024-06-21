@@ -38,6 +38,7 @@ import RenderState from "../Renderer/RenderState.js";
 import VertexArray from "../Renderer/VertexArray.js";
 import BlendingState from "./BlendingState.js";
 import ClippingPlaneCollection from "./ClippingPlaneCollection.js";
+import ClippingPolygonCollection from "./ClippingPolygonCollection.js";
 import DepthFunction from "./DepthFunction.js";
 import GlobeSurfaceTile from "./GlobeSurfaceTile.js";
 import ImageryLayer from "./ImageryLayer.js";
@@ -177,6 +178,13 @@ function GlobeSurfaceTileProvider(options) {
   this._multiClippingPlanes = undefined;
 
   /**
+   * A property specifying a {@link ClippingPolygonCollection} used to selectively disable rendering inside or outside a list of polygons.
+   * @type {ClippingPolygonCollection}
+   * @private
+   */
+  this._clippingPolygons = undefined;
+
+  /**
    * A property specifying a {@link Rectangle} used to selectively limit terrain and imagery rendering.
    * @type {Rectangle}
    */
@@ -299,7 +307,7 @@ Object.defineProperties(GlobeSurfaceTileProvider.prototype, {
     },
   },
   /**
-   * The {@link ClippingPlaneCollection} used to selectively disable rendering the tileset.
+   * The {@link ClippingPlaneCollection} used to selectively disable rendering.
    *
    * @type {ClippingPlaneCollection}
    *
@@ -330,6 +338,22 @@ Object.defineProperties(GlobeSurfaceTileProvider.prototype, {
       } else {
         this._multiClippingPlanes = undefined;
       }
+    },
+  },
+
+  /**
+   * The {@link ClippingPolygonCollection} used to selectively disable rendering inside or outside a list of polygons.
+   *
+   * @type {ClippingPolygonCollection}
+   *
+   * @private
+   */
+  clippingPolygons: {
+    get: function () {
+      return this._clippingPolygons;
+    },
+    set: function (value) {
+      ClippingPolygonCollection.setOwner(value, this, "_clippingPolygons");
     },
   },
 });
@@ -423,6 +447,14 @@ GlobeSurfaceTileProvider.prototype.beginUpdate = function (frameState) {
   if (defined(multiClippingPlanes) && multiClippingPlanes.length > 0) {
     multiClippingPlanes.update(frameState);
   }
+
+  // update clipping polygons
+  const clippingPolygons = this._clippingPolygons;
+  if (defined(clippingPolygons) && clippingPolygons.enabled) {
+    clippingPolygons.update(frameState);
+    clippingPolygons.queueCommands(frameState);
+  }
+
   this._usedDrawCommands = 0;
 
   this._hasLoadedTilesThisFrame = false;
@@ -714,6 +746,11 @@ function isUndergroundVisible(tileProvider, frameState) {
   if (defined(tileProvider._multiClippingPlanes)) {
     return true;
   }
+  const clippingPolygons = tileProvider._clippingPolygons;
+  if (defined(clippingPolygons) && clippingPolygons.enabled) {
+    return true;
+  }
+
   if (
     !Rectangle.equals(
       tileProvider.cartographicLimitRectangle,
@@ -830,6 +867,16 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
     if (planeIntersection === Intersect.OUTSIDE) {
       return Visibility.NONE;
     }
+  }
+
+  const clippingPolygons = this._clippingPolygons;
+  if (defined(clippingPolygons) && clippingPolygons.enabled) {
+    const polygonIntersection = clippingPolygons.computeIntersectionWithBoundingVolume(
+      tileBoundingRegion
+    );
+    tile.isClipped = polygonIntersection !== Intersect.OUTSIDE;
+    // Polygon clipping intersections are determined by outer rectangles, therefore we cannot
+    // preemptively determine if a tile is completely clipped or not here.
   }
 
   let visibility;
@@ -1450,6 +1497,8 @@ GlobeSurfaceTileProvider.prototype.isDestroyed = function () {
 GlobeSurfaceTileProvider.prototype.destroy = function () {
   this._tileProvider = this._tileProvider && this._tileProvider.destroy();
   this._clippingPlanes = this._clippingPlanes && this._clippingPlanes.destroy();
+  this._clippingPolygons =
+    this._clippingPolygons && this._clippingPolygons.destroy();
   this._removeLayerAddedListener =
     this._removeLayerAddedListener && this._removeLayerAddedListener();
   this._removeLayerRemovedListener =
@@ -1882,6 +1931,21 @@ function createTileUniformMap(frameState, globeSurfaceTileProvider) {
       }
       if (defined(clippingPlanesLength)) {
         return clippingPlanesLength;
+        return frameState.context.defaultTexture;
+      }
+    },
+    u_clippingDistance: function () {
+      const texture =
+        globeSurfaceTileProvider._clippingPolygons.clippingTexture;
+      if (defined(texture)) {
+        return texture;
+      }
+      return frameState.context.defaultTexture;
+    },
+    u_clippingExtents: function () {
+      const texture = globeSurfaceTileProvider._clippingPolygons.extentsTexture;
+      if (defined(texture)) {
+        return texture;
       }
       return frameState.context.defaultTexture;
     },
@@ -2265,6 +2329,8 @@ const surfaceShaderSetOptionsScratch = {
   enableFog: undefined,
   enableClippingPlanes: undefined,
   clippingPlanes: undefined,
+  enableClippingPolygons: undefined,
+  clippingPolygons: undefined,
   clippedByBoundaries: undefined,
   hasImageryLayerCutout: undefined,
   colorCorrect: undefined,
@@ -2390,6 +2456,13 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     defined(tileProvider.clippingPlanes) &&
     tileProvider.clippingPlanes.enabled
   ) {
+    --maxTextures;
+  }
+  if (
+    defined(tileProvider.clippingPolygons) &&
+    tileProvider.clippingPolygons.enabled
+  ) {
+    --maxTextures;
     --maxTextures;
   }
 
@@ -3049,6 +3122,11 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       uniformMapProperties.clippingPlanesEdgeWidth = clippingPlanes.edgeWidth;
     }
 
+    // update clipping polygons
+    const clippingPolygons = tileProvider._clippingPolygons;
+    const clippingPolygonsEnabled =
+      defined(clippingPolygons) && clippingPolygons.enabled && tile.isClipped;
+
     surfaceShaderSetOptions.numberOfDayTextures = numberOfDayTextures;
     surfaceShaderSetOptions.applyBrightness = applyBrightness;
     surfaceShaderSetOptions.applyContrast = applyContrast;
@@ -3063,6 +3141,8 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     surfaceShaderSetOptions.clippingPlanes = clippingPlanes;
     surfaceShaderSetOptions.multiClippingPlanes =
       tileProvider._multiClippingPlanes;
+    surfaceShaderSetOptions.enableClippingPolygons = clippingPolygonsEnabled;
+    surfaceShaderSetOptions.clippingPolygons = clippingPolygons;
     surfaceShaderSetOptions.hasImageryLayerCutout = applyCutout;
     surfaceShaderSetOptions.colorCorrect = colorCorrect;
     surfaceShaderSetOptions.highlightFillTile = highlightFillTile;

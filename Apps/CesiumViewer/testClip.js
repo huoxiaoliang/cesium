@@ -284,6 +284,7 @@ function testUpLift(viewer) {
     showUp: true,
     hasUpdate: true,
     heights: heights,
+    height: 5000,
     rectangles,
     texture,
   };
