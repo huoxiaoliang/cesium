@@ -387,7 +387,7 @@ export async function prepare() {
 export const cloc = gulp.series(clean, clocSource);
 
 //Builds the documentation
-export function buildDocs() {
+export async function buildDocs() {
   const generatePrivateDocumentation = argv.private ? "--private" : "--private";
 
   execSync(
