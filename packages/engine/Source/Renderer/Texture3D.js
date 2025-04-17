@@ -42,18 +42,18 @@ function Texture3D(options) {
   const pixelFormat = defaultValue(options.pixelFormat, PixelFormat.RGBA);
   const pixelDatatype = defaultValue(
     options.pixelDatatype,
-    PixelDatatype.UNSIGNED_BYTE
+    PixelDatatype.UNSIGNED_BYTE,
   );
   const internalFormat = PixelFormat.toInternalFormat(
     pixelFormat,
     pixelDatatype,
-    context
+    context,
   );
 
   //>>includeStart('debug', pragmas.debug);
   if (!defined(width) || !defined(height) || !defined(depth)) {
     throw new DeveloperError(
-      "options requires a source field to create an initialized texture or width and height fields to create a blank texture."
+      "options requires a source field to create an initialized texture or width and height fields to create a blank texture.",
     );
   }
 
@@ -61,7 +61,7 @@ function Texture3D(options) {
 
   if (width > ContextLimits.maximumTextureSize) {
     throw new DeveloperError(
-      `Width must be less than or equal to the maximum texture size (${ContextLimits.maximumTextureSize}).  Check maximumTextureSize.`
+      `Width must be less than or equal to the maximum texture size (${ContextLimits.maximumTextureSize}).  Check maximumTextureSize.`,
     );
   }
 
@@ -69,7 +69,7 @@ function Texture3D(options) {
 
   if (height > ContextLimits.maximumTextureSize) {
     throw new DeveloperError(
-      `Height must be less than or equal to the maximum texture size (${ContextLimits.maximumTextureSize}).  Check maximumTextureSize.`
+      `Height must be less than or equal to the maximum texture size (${ContextLimits.maximumTextureSize}).  Check maximumTextureSize.`,
     );
   }
 
@@ -83,7 +83,7 @@ function Texture3D(options) {
     pixelDatatype !== PixelDatatype.UNSIGNED_INT
   ) {
     throw new DeveloperError(
-      "When options.pixelFormat is DEPTH_COMPONENT, options.pixelDatatype must be UNSIGNED_SHORT or UNSIGNED_INT."
+      "When options.pixelFormat is DEPTH_COMPONENT, options.pixelDatatype must be UNSIGNED_SHORT or UNSIGNED_INT.",
     );
   }
 
@@ -92,13 +92,13 @@ function Texture3D(options) {
     pixelDatatype !== PixelDatatype.UNSIGNED_INT_24_8
   ) {
     throw new DeveloperError(
-      "When options.pixelFormat is DEPTH_STENCIL, options.pixelDatatype must be UNSIGNED_INT_24_8."
+      "When options.pixelFormat is DEPTH_STENCIL, options.pixelDatatype must be UNSIGNED_INT_24_8.",
     );
   }
 
   if (pixelDatatype === PixelDatatype.FLOAT && !context.floatingPointTexture) {
     throw new DeveloperError(
-      "When options.pixelDatatype is FLOAT, this WebGL implementation must support the OES_texture_float extension.  Check context.floatingPointTexture."
+      "When options.pixelDatatype is FLOAT, this WebGL implementation must support the OES_texture_float extension.  Check context.floatingPointTexture.",
     );
   }
 
@@ -107,20 +107,20 @@ function Texture3D(options) {
     !context.halfFloatingPointTexture
   ) {
     throw new DeveloperError(
-      "When options.pixelDatatype is HALF_FLOAT, this WebGL implementation must support the OES_texture_half_float extension. Check context.halfFloatingPointTexture."
+      "When options.pixelDatatype is HALF_FLOAT, this WebGL implementation must support the OES_texture_half_float extension. Check context.halfFloatingPointTexture.",
     );
   }
 
   if (PixelFormat.isDepthFormat(pixelFormat)) {
     if (defined(source)) {
       throw new DeveloperError(
-        "When options.pixelFormat is DEPTH_COMPONENT or DEPTH_STENCIL, source cannot be provided."
+        "When options.pixelFormat is DEPTH_COMPONENT or DEPTH_STENCIL, source cannot be provided.",
       );
     }
 
     if (!context.depthTexture) {
       throw new DeveloperError(
-        "When options.pixelFormat is DEPTH_COMPONENT or DEPTH_STENCIL, this WebGL implementation must support WEBGL_depth_texture.  Check context.depthTexture."
+        "When options.pixelFormat is DEPTH_COMPONENT or DEPTH_STENCIL, this WebGL implementation must support WEBGL_depth_texture.  Check context.depthTexture.",
       );
     }
   }
@@ -149,7 +149,7 @@ function Texture3D(options) {
     unpackAlignment = PixelFormat.alignmentInBytes(
       pixelFormat,
       pixelDatatype,
-      width
+      width,
     );
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, unpackAlignment);
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
@@ -165,7 +165,7 @@ function Texture3D(options) {
       0,
       pixelFormat,
       PixelDatatype.toWebGLConstant(pixelDatatype, context),
-      arrayBufferView
+      arrayBufferView,
     );
     initialized = false;
   }

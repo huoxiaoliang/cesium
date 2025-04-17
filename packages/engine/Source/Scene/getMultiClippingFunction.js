@@ -1,8 +1,6 @@
-import Cartesian2 from "../Core/Cartesian2.js";
 import Check from "../Core/Check.js";
 import ClippingPlaneCollection from "./ClippingPlaneCollection.js";
 
-const textureResolutionScratch = new Cartesian2();
 /**
  * Gets the GLSL functions needed to retrieve collections of ClippingPlaneCollections from a MultiClippingPlaneCollection's texture.
  *
@@ -15,7 +13,7 @@ function getMultiClippingFunction(multiClippingPlaneCollection, context) {
   //>>includeStart('debug', pragmas.debug);
   Check.typeOf.object(
     "multiClippingPlaneCollection",
-    multiClippingPlaneCollection
+    multiClippingPlaneCollection,
   );
   Check.typeOf.object("context", context);
   //>>includeEnd('debug');
@@ -39,44 +37,13 @@ function getMultiClippingFunction(multiClippingPlaneCollection, context) {
   // MultiClippingPlaneCollection is now not abled to deal with unionClippingRegions.
   functions += clippingFunctionIntersect(
     multiClippingPlaneCollection.length,
-    maxLength
+    maxLength,
   );
 
   // functions += unionClippingRegions
   //   ? clippingFunctionUnion(clippingPlanesLength)
   //   : clippingFunctionIntersect(clippingPlanesLength);
   return functions;
-}
-
-// This function  has not be rewritten! Don't use it directly.
-function clippingFunctionUnion(clippingPlanesLength) {
-  const functionString = `float clip(vec4 fragCoord, sampler2D clippingPlanes, mat4 clippingPlanesMatrix)\n
-    {\n
-      vec4 position = czm_windowToEyeCoordinates(fragCoord);\n
-      vec3 clipNormal = vec3(0.0);\n
-      vec3 clipPosition = vec3(0.0);\n
-      float clipAmount;\n  // For union planes, we want to get the min distance. So we set the initial value to the first plane distance in the loop below.
-      float pixelWidth = czm_metersPerPixel(position);\n
-      bool breakAndDiscard = false;\n
-      for (int i = 0; i < + ${clippingPlanesLength} ; ++i)\n
-      {\n
-          vec4 clippingPlane = getClippingPlane(clippingPlanes, i, clippingPlanesMatrix);\n
-          clipNormal = clippingPlane.xyz;\n
-          clipPosition = -clippingPlane.w * clipNormal;\n
-          float amount = dot(clipNormal, (position.xyz - clipPosition)) / pixelWidth;\n
-          clipAmount = czm_branchFreeTernary(i == 0, amount, min(amount, clipAmount));\n
-          if (amount <= 0.0)\n
-          {\n
-             breakAndDiscard = true;\n
-             break;\n // HLSL compiler bug if we discard here: https://bugs.chromium.org/p/angleproject/issues/detail?id=1945#c6
-          }\n
-      }\n
-      if (breakAndDiscard) {\n
-          discard;\n
-      }\n
-      return clipAmount;\n
-    }\n`;
-  return functionString;
 }
 
 function clippingFunctionIntersect(arrayLength, maxLength) {

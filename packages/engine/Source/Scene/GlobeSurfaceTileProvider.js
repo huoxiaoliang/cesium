@@ -8,7 +8,6 @@ import clone from "../Core/clone.js";
 import Color from "../Core/Color.js";
 import ColorGeometryInstanceAttribute from "../Core/ColorGeometryInstanceAttribute.js";
 import combine from "../Core/combine.js";
-import defaultValue from "../Core/defaultValue.js";
 import defined from "../Core/defined.js";
 import destroyObject from "../Core/destroyObject.js";
 import DeveloperError from "../Core/DeveloperError.js";
@@ -83,6 +82,7 @@ function GlobeSurfaceTileProvider(options) {
   this.lightingFadeOutDistance = 6500000.0;
   this.lightingFadeInDistance = 9000000.0;
   this.hasWaterMask = false;
+  this.showWaterEffect = false;
   this.oceanNormalMap = undefined;
   this.zoomedOutOceanSpecularIntensity = 0.5;
   this.enableLighting = false;
@@ -128,22 +128,26 @@ function GlobeSurfaceTileProvider(options) {
 
   this._errorEvent = new Event();
 
-  this._removeLayerAddedListener = this._imageryLayers.layerAdded.addEventListener(
-    GlobeSurfaceTileProvider.prototype._onLayerAdded,
-    this
-  );
-  this._removeLayerRemovedListener = this._imageryLayers.layerRemoved.addEventListener(
-    GlobeSurfaceTileProvider.prototype._onLayerRemoved,
-    this
-  );
-  this._removeLayerMovedListener = this._imageryLayers.layerMoved.addEventListener(
-    GlobeSurfaceTileProvider.prototype._onLayerMoved,
-    this
-  );
-  this._removeLayerShownListener = this._imageryLayers.layerShownOrHidden.addEventListener(
-    GlobeSurfaceTileProvider.prototype._onLayerShownOrHidden,
-    this
-  );
+  this._removeLayerAddedListener =
+    this._imageryLayers.layerAdded.addEventListener(
+      GlobeSurfaceTileProvider.prototype._onLayerAdded,
+      this,
+    );
+  this._removeLayerRemovedListener =
+    this._imageryLayers.layerRemoved.addEventListener(
+      GlobeSurfaceTileProvider.prototype._onLayerRemoved,
+      this,
+    );
+  this._removeLayerMovedListener =
+    this._imageryLayers.layerMoved.addEventListener(
+      GlobeSurfaceTileProvider.prototype._onLayerMoved,
+      this,
+    );
+  this._removeLayerShownListener =
+    this._imageryLayers.layerShownOrHidden.addEventListener(
+      GlobeSurfaceTileProvider.prototype._onLayerShownOrHidden,
+      this,
+    );
   this._imageryLayersUpdatedEvent = new Event();
 
   this._layerOrderChanged = false;
@@ -220,7 +224,7 @@ Object.defineProperties(GlobeSurfaceTileProvider.prototype, {
       this._baseColor = value;
       this._firstPassInitialColor = Cartesian4.fromColor(
         value,
-        this._firstPassInitialColor
+        this._firstPassInitialColor,
       );
     },
   },
@@ -508,7 +512,7 @@ GlobeSurfaceTileProvider.prototype.endUpdate = function (frameState) {
       this,
       this._quadtree._tilesToRender,
       frameState,
-      this._vertexArraysToDestroy
+      this._vertexArraysToDestroy,
     );
   }
 
@@ -586,7 +590,7 @@ GlobeSurfaceTileProvider.prototype.endUpdate = function (frameState) {
       }
       frameState.minimumTerrainHeight = Math.min(
         frameState.minimumTerrainHeight,
-        tileBoundingRegion.minimumHeight
+        tileBoundingRegion.minimumHeight,
       );
     }
   }
@@ -599,7 +603,7 @@ function pushCommand(command, frameState) {
     globeTranslucencyState.pushDerivedCommands(
       command,
       isBlendCommand,
-      frameState
+      frameState,
     );
   } else {
     frameState.commandList.push(command);
@@ -633,7 +637,7 @@ GlobeSurfaceTileProvider.prototype.cancelReprojections = function () {
  * @returns {number} The maximum geometric error in meters.
  */
 GlobeSurfaceTileProvider.prototype.getLevelMaximumGeometricError = function (
-  level
+  level,
 ) {
   if (!defined(this._terrainProvider)) {
     return 0;
@@ -673,7 +677,7 @@ GlobeSurfaceTileProvider.prototype.loadTile = function (frameState, tile) {
     this._imageryLayers,
     this.quadtree,
     this._vertexArraysToDestroy,
-    terrainOnly
+    terrainOnly,
   );
 
   surfaceTile = tile.data;
@@ -695,7 +699,7 @@ GlobeSurfaceTileProvider.prototype.loadTile = function (frameState, tile) {
         this._imageryLayers,
         this.quadtree,
         this._vertexArraysToDestroy,
-        terrainOnly
+        terrainOnly,
       );
     }
   }
@@ -713,7 +717,7 @@ function clipRectangleAntimeridian(tileRectangle, cartographicLimitRectangle) {
   }
   const splitRectangle = Rectangle.clone(
     cartographicLimitRectangle,
-    splitCartographicLimitRectangleScratch
+    splitCartographicLimitRectangleScratch,
   );
   const tileCenter = Rectangle.center(tileRectangle, rectangleCenterScratch);
   if (tileCenter.longitude > 0.0) {
@@ -754,7 +758,7 @@ function isUndergroundVisible(tileProvider, frameState) {
   if (
     !Rectangle.equals(
       tileProvider.cartographicLimitRectangle,
-      Rectangle.MAX_VALUE
+      Rectangle.MAX_VALUE,
     )
   ) {
     return true;
@@ -779,7 +783,7 @@ function isUndergroundVisible(tileProvider, frameState) {
 GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
   tile,
   frameState,
-  occluders
+  occluders,
 ) {
   const distance = this.computeDistanceToTile(tile, frameState);
   tile._distance = distance;
@@ -812,12 +816,12 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
   surfaceTile.clippedByBoundaries = false;
   const clippedCartographicLimitRectangle = clipRectangleAntimeridian(
     tile.rectangle,
-    this.cartographicLimitRectangle
+    this.cartographicLimitRectangle,
   );
   const areaLimitIntersection = Rectangle.simpleIntersection(
     clippedCartographicLimitRectangle,
     tile.rectangle,
-    rectangleIntersectionScratch
+    rectangleIntersectionScratch,
   );
   if (!defined(areaLimitIntersection)) {
     return Visibility.NONE;
@@ -833,13 +837,13 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
       frameState.mapProjection,
       tileBoundingRegion.minimumHeight,
       tileBoundingRegion.maximumHeight,
-      boundingVolume
+      boundingVolume,
     );
     Cartesian3.fromElements(
       boundingVolume.center.z,
       boundingVolume.center.x,
       boundingVolume.center.y,
-      boundingVolume.center
+      boundingVolume.center,
     );
 
     if (
@@ -849,7 +853,7 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
       boundingVolume = BoundingSphere.union(
         tileBoundingRegion.boundingSphere,
         boundingVolume,
-        boundingVolume
+        boundingVolume,
       );
     }
   }
@@ -860,9 +864,8 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
 
   const clippingPlanes = this._clippingPlanes;
   if (defined(clippingPlanes) && clippingPlanes.enabled) {
-    const planeIntersection = clippingPlanes.computeIntersectionWithBoundingVolume(
-      boundingVolume
-    );
+    const planeIntersection =
+      clippingPlanes.computeIntersectionWithBoundingVolume(boundingVolume);
     tile.isClipped = planeIntersection !== Intersect.INSIDE;
     if (planeIntersection === Intersect.OUTSIDE) {
       return Visibility.NONE;
@@ -871,9 +874,10 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
 
   const clippingPolygons = this._clippingPolygons;
   if (defined(clippingPolygons) && clippingPolygons.enabled) {
-    const polygonIntersection = clippingPolygons.computeIntersectionWithBoundingVolume(
-      tileBoundingRegion
-    );
+    const polygonIntersection =
+      clippingPolygons.computeIntersectionWithBoundingVolume(
+        tileBoundingRegion,
+      );
     tile.isClipped = polygonIntersection !== Intersect.OUTSIDE;
     // Polygon clipping intersections are determined by outer rectangles, therefore we cannot
     // preemptively determine if a tile is completely clipped or not here.
@@ -911,7 +915,7 @@ GlobeSurfaceTileProvider.prototype.computeTileVisibility = function (
     if (
       occluders.ellipsoid.isScaledSpacePointVisiblePossiblyUnderEllipsoid(
         occludeePointInScaledSpace,
-        tileBoundingRegion.minimumHeight
+        tileBoundingRegion.minimumHeight,
       )
     ) {
       return visibility;
@@ -939,7 +943,7 @@ GlobeSurfaceTileProvider.prototype.canRefine = function (tile) {
   const childAvailable = this.terrainProvider.getTileDataAvailable(
     tile.x * 2,
     tile.y * 2,
-    tile.level + 1
+    tile.level + 1,
   );
   return childAvailable !== undefined;
 };
@@ -957,7 +961,7 @@ const canRenderTraversalStack = [];
  */
 GlobeSurfaceTileProvider.prototype.canRenderWithoutLosingDetail = function (
   tile,
-  frameState
+  frameState,
 ) {
   const surfaceTile = tile.data;
 
@@ -1013,7 +1017,7 @@ GlobeSurfaceTileProvider.prototype.canRenderWithoutLosingDetail = function (
     tile.southwestChild,
     tile.southeastChild,
     tile.northwestChild,
-    tile.northeastChild
+    tile.northeastChild,
   );
 
   while (stack.length > 0) {
@@ -1063,7 +1067,7 @@ GlobeSurfaceTileProvider.prototype.canRenderWithoutLosingDetail = function (
         descendant.southwestChild,
         descendant.southeastChild,
         descendant.northwestChild,
-        descendant.northeastChild
+        descendant.northeastChild,
       );
     }
   }
@@ -1081,7 +1085,7 @@ const tileDirectionScratch = new Cartesian3();
  */
 GlobeSurfaceTileProvider.prototype.computeTileLoadPriority = function (
   tile,
-  frameState
+  frameState,
 ) {
   const surfaceTile = tile.data;
   if (surfaceTile === undefined) {
@@ -1098,7 +1102,7 @@ GlobeSurfaceTileProvider.prototype.computeTileLoadPriority = function (
   const tileDirection = Cartesian3.subtract(
     obb.center,
     cameraPosition,
-    tileDirectionScratch
+    tileDirectionScratch,
   );
   const magnitude = Cartesian3.magnitude(tileDirection);
   if (magnitude < CesiumMath.EPSILON5) {
@@ -1130,7 +1134,7 @@ const northeastScratch = new Cartesian3();
  */
 GlobeSurfaceTileProvider.prototype.showTileThisFrame = function (
   tile,
-  frameState
+  frameState,
 ) {
   let readyTextureCount = 0;
   const tileImageryCollection = tile.data.imagery;
@@ -1177,7 +1181,7 @@ function computeOccludeePoint(
   rectangle,
   minimumHeight,
   maximumHeight,
-  result
+  result,
 ) {
   const ellipsoidalOccluder = tileProvider.quadtree._occluders.ellipsoid;
   const ellipsoid = ellipsoidalOccluder.ellipsoid;
@@ -1188,35 +1192,35 @@ function computeOccludeePoint(
     rectangle.south,
     maximumHeight,
     ellipsoid,
-    cornerPositions[0]
+    cornerPositions[0],
   );
   Cartesian3.fromRadians(
     rectangle.east,
     rectangle.south,
     maximumHeight,
     ellipsoid,
-    cornerPositions[1]
+    cornerPositions[1],
   );
   Cartesian3.fromRadians(
     rectangle.west,
     rectangle.north,
     maximumHeight,
     ellipsoid,
-    cornerPositions[2]
+    cornerPositions[2],
   );
   Cartesian3.fromRadians(
     rectangle.east,
     rectangle.north,
     maximumHeight,
     ellipsoid,
-    cornerPositions[3]
+    cornerPositions[3],
   );
 
   return ellipsoidalOccluder.computeHorizonCullingPointPossiblyUnderEllipsoid(
     center,
     cornerPositions,
     minimumHeight,
-    result
+    result,
   );
 }
 
@@ -1230,7 +1234,7 @@ function computeOccludeePoint(
  */
 GlobeSurfaceTileProvider.prototype.computeDistanceToTile = function (
   tile,
-  frameState
+  frameState,
 ) {
   // The distance should be:
   // 1. the actual distance to the tight-fitting bounding volume, or
@@ -1400,12 +1404,12 @@ function updateTileBoundingRegion(tile, tileProvider, frameState) {
       tileBoundingRegion.minimumHeight = VerticalExaggeration.getHeight(
         tileBoundingRegion.minimumHeight,
         exaggeration,
-        exaggerationRelativeHeight
+        exaggerationRelativeHeight,
       );
       tileBoundingRegion.maximumHeight = VerticalExaggeration.getHeight(
         tileBoundingRegion.maximumHeight,
         exaggeration,
-        exaggerationRelativeHeight
+        exaggerationRelativeHeight,
       );
     }
 
@@ -1413,15 +1417,15 @@ function updateTileBoundingRegion(tile, tileProvider, frameState) {
       if (!surfaceTile.boundingVolumeIsFromMesh) {
         tileBoundingRegion._orientedBoundingBox = OrientedBoundingBox.clone(
           mesh.orientedBoundingBox,
-          tileBoundingRegion._orientedBoundingBox
+          tileBoundingRegion._orientedBoundingBox,
         );
         tileBoundingRegion._boundingSphere = BoundingSphere.clone(
           mesh.boundingSphere3D,
-          tileBoundingRegion._boundingSphere
+          tileBoundingRegion._boundingSphere,
         );
         surfaceTile.occludeePointInScaledSpace = Cartesian3.clone(
           mesh.occludeePointInScaledSpace,
-          surfaceTile.occludeePointInScaledSpace
+          surfaceTile.occludeePointInScaledSpace,
         );
 
         // If the occludee point is not defined, fallback to calculating it from the OBB
@@ -1432,7 +1436,7 @@ function updateTileBoundingRegion(tile, tileProvider, frameState) {
             tile.rectangle,
             tileBoundingRegion.minimumHeight,
             tileBoundingRegion.maximumHeight,
-            surfaceTile.occludeePointInScaledSpace
+            surfaceTile.occludeePointInScaledSpace,
           );
         }
       }
@@ -1452,7 +1456,7 @@ function updateTileBoundingRegion(tile, tileProvider, frameState) {
           tile.rectangle,
           tileBoundingRegion.minimumHeight,
           tileBoundingRegion.maximumHeight,
-          surfaceTile.occludeePointInScaledSpace
+          surfaceTile.occludeePointInScaledSpace,
         );
       }
     }
@@ -1525,10 +1529,7 @@ function getTileReadyCallback(tileImageriesToFree, layer, terrainProvider) {
     let i;
     for (i = 0; i < length; ++i) {
       tileImagery = tileImageryCollection[i];
-      imagery = defaultValue(
-        tileImagery.readyImagery,
-        tileImagery.loadingImagery
-      );
+      imagery = tileImagery.readyImagery ?? tileImagery.loadingImagery;
       if (imagery.imageryLayer === layer) {
         startIndex = i;
         break;
@@ -1539,7 +1540,7 @@ function getTileReadyCallback(tileImageriesToFree, layer, terrainProvider) {
       const endIndex = startIndex + tileImageriesToFree;
       tileImagery = tileImageryCollection[endIndex];
       imagery = defined(tileImagery)
-        ? defaultValue(tileImagery.readyImagery, tileImagery.loadingImagery)
+        ? (tileImagery.readyImagery ?? tileImagery.loadingImagery)
         : undefined;
       if (!defined(imagery) || imagery.imageryLayer !== layer) {
         // Return false to keep the callback if we have to wait on the skeletons
@@ -1547,7 +1548,7 @@ function getTileReadyCallback(tileImageriesToFree, layer, terrainProvider) {
         return !layer._createTileImagerySkeletons(
           tile,
           terrainProvider,
-          endIndex
+          endIndex,
         );
       }
 
@@ -1591,10 +1592,8 @@ GlobeSurfaceTileProvider.prototype._onLayerAdded = function (layer, index) {
         let tileImageriesToFree = 0;
         for (i = 0; i < length; ++i) {
           const tileImagery = tileImageryCollection[i];
-          const imagery = defaultValue(
-            tileImagery.readyImagery,
-            tileImagery.loadingImagery
-          );
+          const imagery =
+            tileImagery.readyImagery ?? tileImagery.loadingImagery;
           if (imagery.imageryLayer === layer) {
             if (startIndex === -1) {
               startIndex = i;
@@ -1619,14 +1618,14 @@ GlobeSurfaceTileProvider.prototype._onLayerAdded = function (layer, index) {
           layer._createTileImagerySkeletons(
             tile,
             terrainProvider,
-            insertionPoint
+            insertionPoint,
           )
         ) {
           // Add callback to remove old TileImageries when the new TileImageries are ready
           tile._loadedCallbacks[layer._layerIndex] = getTileReadyCallback(
             tileImageriesToFree,
             layer,
-            terrainProvider
+            terrainProvider,
           );
 
           tile.state = QuadtreeTileLoadState.LOADING;
@@ -1703,7 +1702,7 @@ GlobeSurfaceTileProvider.prototype._onLayerRemoved = function (layer, index) {
 GlobeSurfaceTileProvider.prototype._onLayerMoved = function (
   layer,
   newIndex,
-  oldIndex
+  oldIndex,
 ) {
   this._layerOrderChanged = true;
   this._imageryLayersUpdatedEvent.raiseEvent();
@@ -1712,7 +1711,7 @@ GlobeSurfaceTileProvider.prototype._onLayerMoved = function (
 GlobeSurfaceTileProvider.prototype._onLayerShownOrHidden = function (
   layer,
   index,
-  show
+  show,
 ) {
   if (show) {
     this._onLayerAdded(layer, index);
@@ -1775,7 +1774,7 @@ function createTileUniformMap(frameState, globeSurfaceTileProvider) {
       const centerEye = Matrix4.multiplyByPoint(
         viewMatrix,
         this.properties.rtc,
-        centerEyeScratch
+        centerEyeScratch,
       );
       Matrix4.setTranslation(viewMatrix, centerEye, modifiedModelViewScratch);
       return modifiedModelViewScratch;
@@ -1786,17 +1785,17 @@ function createTileUniformMap(frameState, globeSurfaceTileProvider) {
       const centerEye = Matrix4.multiplyByPoint(
         viewMatrix,
         this.properties.rtc,
-        centerEyeScratch
+        centerEyeScratch,
       );
       Matrix4.setTranslation(
         viewMatrix,
         centerEye,
-        modifiedModelViewProjectionScratch
+        modifiedModelViewProjectionScratch,
       );
       Matrix4.multiply(
         projectionMatrix,
         modifiedModelViewProjectionScratch,
-        modifiedModelViewProjectionScratch
+        modifiedModelViewProjectionScratch,
       );
       return modifiedModelViewProjectionScratch;
     },
@@ -1888,25 +1887,25 @@ function createTileUniformMap(frameState, globeSurfaceTileProvider) {
         const transform = Matrix4.multiply(
           frameState.context.uniformState.view,
           multiClippingPlanes.modelMatrix,
-          scratchClippingPlanesMatrix
+          scratchClippingPlanesMatrix,
         );
 
         return Matrix4.inverseTranspose(
           transform,
-          scratchInverseTransposeClippingPlanesMatrix
+          scratchInverseTransposeClippingPlanesMatrix,
         );
       }
       const transform = defined(clippingPlanes)
         ? Matrix4.multiply(
             frameState.context.uniformState.view,
             clippingPlanes.modelMatrix,
-            scratchClippingPlanesMatrix
+            scratchClippingPlanesMatrix,
           )
         : Matrix4.IDENTITY;
 
       return Matrix4.inverseTranspose(
         transform,
-        scratchInverseTransposeClippingPlanesMatrix
+        scratchInverseTransposeClippingPlanesMatrix,
       );
     },
     u_clippingPlanesEdgeStyle: function () {
@@ -1929,10 +1928,7 @@ function createTileUniformMap(frameState, globeSurfaceTileProvider) {
           return texture;
         }
       }
-      if (defined(clippingPlanesLength)) {
-        return clippingPlanesLength;
-        return frameState.context.defaultTexture;
-      }
+      return frameState.context.defaultTexture;
     },
     u_clippingDistance: function () {
       const texture =
@@ -2137,8 +2133,8 @@ function createTileUniformMap(frameState, globeSurfaceTileProvider) {
       uniformMap,
       globeSurfaceTileProvider._crcOptions.updateTileUniformMap(
         frameState,
-        globeSurfaceTileProvider
-      )
+        globeSurfaceTileProvider,
+      ),
     );
   }
   if (defined(globeSurfaceTileProvider.materialUniformMap)) {
@@ -2181,7 +2177,7 @@ function createWireframeVertexArrayIfNecessary(context, provider, tile) {
   surfaceTile.wireframeVertexArray = createWireframeVertexArray(
     context,
     vertexArray,
-    mesh
+    mesh,
   );
   surfaceTile.wireframeVertexArray.mesh = mesh;
 }
@@ -2213,7 +2209,7 @@ function createWireframeVertexArray(context, vertexArray, terrainMesh) {
     typedArray: wireframeIndices,
     usage: BufferUsage.STATIC_DRAW,
     indexDatatype: IndexDatatype.fromSizeInBytes(
-      wireframeIndices.BYTES_PER_ELEMENT
+      wireframeIndices.BYTES_PER_ELEMENT,
     ),
   });
   return new VertexArray({
@@ -2260,13 +2256,12 @@ let debugDestroyPrimitive;
     modelMatrix = Matrix4.fromRotationTranslation(
       obb.halfAxes,
       obb.center,
-      modelMatrix
+      modelMatrix,
     );
 
     instanceOBB.modelMatrix = modelMatrix;
-    instanceOBB.attributes.color = ColorGeometryInstanceAttribute.fromColor(
-      color
-    );
+    instanceOBB.attributes.color =
+      ColorGeometryInstanceAttribute.fromColor(color);
 
     primitive = createDebugPrimitive(instanceOBB);
     return primitive;
@@ -2283,13 +2278,12 @@ let debugDestroyPrimitive;
     modelMatrix = Matrix4.multiplyByUniformScale(
       modelMatrix,
       sphere.radius,
-      modelMatrix
+      modelMatrix,
     );
 
     instanceSphere.modelMatrix = modelMatrix;
-    instanceSphere.attributes.color = ColorGeometryInstanceAttribute.fromColor(
-      color
-    );
+    instanceSphere.attributes.color =
+      ColorGeometryInstanceAttribute.fromColor(color);
 
     primitive = createDebugPrimitive(instanceSphere);
     return primitive;
@@ -2389,14 +2383,11 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     globeTranslucencyState.backFaceAlphaByDistance;
   const translucencyRectangle = globeTranslucencyState.rectangle;
 
-  const undergroundColor = defaultValue(
-    tileProvider.undergroundColor,
-    defaultUndergroundColor
-  );
-  const undergroundColorAlphaByDistance = defaultValue(
-    tileProvider.undergroundColorAlphaByDistance,
-    defaultUndergroundColorAlphaByDistance
-  );
+  const undergroundColor =
+    tileProvider.undergroundColor ?? defaultUndergroundColor;
+  const undergroundColorAlphaByDistance =
+    tileProvider.undergroundColorAlphaByDistance ??
+    defaultUndergroundColorAlphaByDistance;
   const showUndergroundColor =
     isUndergroundVisible(tileProvider, frameState) &&
     frameState.mode === SceneMode.SCENE3D &&
@@ -2407,8 +2398,8 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
   const lambertDiffuseMultiplier = tileProvider.lambertDiffuseMultiplier;
   const vertexShadowDarkness = tileProvider.vertexShadowDarkness;
 
-  const showReflectiveOcean =
-    tileProvider.hasWaterMask && defined(waterMaskTexture);
+  const hasWaterMask = tileProvider.hasWaterMask && defined(waterMaskTexture);
+  const showReflectiveOcean = hasWaterMask && tileProvider.showWaterEffect;
   const oceanNormalMap = tileProvider.oceanNormalMap;
   const showOceanWaves = showReflectiveOcean && defined(oceanNormalMap);
   const terrainProvider = tileProvider.terrainProvider;
@@ -2440,7 +2431,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     perFragmentGroundAtmosphere = cameraDistance > fadeOutDistance;
   }
 
-  if (showReflectiveOcean) {
+  if (hasWaterMask) {
     --maxTextures;
   }
   if (showOceanWaves) {
@@ -2499,11 +2490,11 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     const projection = frameState.mapProjection;
     const southwest = projection.project(
       Rectangle.southwest(tile.rectangle),
-      southwestScratch
+      southwestScratch,
     );
     const northeast = projection.project(
       Rectangle.northeast(tile.rectangle),
-      northeastScratch
+      northeastScratch,
     );
 
     tileRectangle.x = southwest.x;
@@ -2544,9 +2535,8 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       southLatitude = tile.rectangle.south;
       northLatitude = tile.rectangle.north;
 
-      southMercatorY = WebMercatorProjection.geodeticLatitudeToMercatorAngle(
-        southLatitude
-      );
+      southMercatorY =
+        WebMercatorProjection.geodeticLatitudeToMercatorAngle(southLatitude);
 
       oneOverMercatorHeight =
         1.0 /
@@ -2560,6 +2550,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
   const surfaceShaderSetOptions = surfaceShaderSetOptionsScratch;
   surfaceShaderSetOptions.frameState = frameState;
   surfaceShaderSetOptions.surfaceTile = surfaceTile;
+  surfaceShaderSetOptions.hasWaterMask = hasWaterMask;
   surfaceShaderSetOptions.showReflectiveOcean = showReflectiveOcean;
   surfaceShaderSetOptions.showOceanWaves = showOceanWaves;
   surfaceShaderSetOptions.enableLighting = tileProvider.enableLighting;
@@ -2580,7 +2571,8 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     tileProvider.atmosphereMieScaleHeight;
   surfaceShaderSetOptions.atmosphereMieAnisotropy =
     tileProvider.atmosphereMieAnisotropy;
-  surfaceShaderSetOptions.perFragmentGroundAtmosphere = perFragmentGroundAtmosphere;
+  surfaceShaderSetOptions.perFragmentGroundAtmosphere =
+    perFragmentGroundAtmosphere;
   surfaceShaderSetOptions.hasVertexNormals = hasVertexNormals;
   surfaceShaderSetOptions.useWebMercatorProjection = useWebMercatorProjection;
   surfaceShaderSetOptions.clippedByBoundaries = surfaceTile.clippedByBoundaries;
@@ -2619,7 +2611,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     for (let i = 0; i < drawCommandsLength; ++i) {
       tileProvider._uniformMaps[i] = createTileUniformMap(
         frameState,
-        tileProvider
+        tileProvider,
       );
     }
   }
@@ -2701,14 +2693,14 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
         frontFaceAlphaByDistanceFinal.nearValue,
         frontFaceAlphaByDistanceFinal.far,
         frontFaceAlphaByDistanceFinal.farValue,
-        uniformMapProperties.frontFaceAlphaByDistance
+        uniformMapProperties.frontFaceAlphaByDistance,
       );
       Cartesian4.fromElements(
         backFaceAlphaByDistanceFinal.near,
         backFaceAlphaByDistanceFinal.nearValue,
         backFaceAlphaByDistanceFinal.far,
         backFaceAlphaByDistanceFinal.farValue,
-        uniformMapProperties.backFaceAlphaByDistance
+        uniformMapProperties.backFaceAlphaByDistance,
       );
     }
 
@@ -2717,7 +2709,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       undergroundColorAlphaByDistance.nearValue,
       undergroundColorAlphaByDistance.far,
       undergroundColorAlphaByDistance.farValue,
-      uniformMapProperties.undergroundColorAlphaByDistance
+      uniformMapProperties.undergroundColorAlphaByDistance,
     );
     Color.clone(undergroundColor, uniformMapProperties.undergroundColor);
 
@@ -2731,12 +2723,13 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     if (highlightFillTile) {
       Color.clone(
         tileProvider.fillHighlightColor,
-        uniformMapProperties.fillHighlightColor
+        uniformMapProperties.fillHighlightColor,
       );
     }
 
     uniformMapProperties.verticalExaggerationAndRelativeHeight.x = exaggeration;
-    uniformMapProperties.verticalExaggerationAndRelativeHeight.y = exaggerationRelativeHeight;
+    uniformMapProperties.verticalExaggerationAndRelativeHeight.y =
+      exaggerationRelativeHeight;
 
     uniformMapProperties.center3D = mesh.center;
     Cartesian3.clone(rtc, uniformMapProperties.rtc);
@@ -2745,26 +2738,29 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     uniformMapProperties.southAndNorthLatitude.x = southLatitude;
     uniformMapProperties.southAndNorthLatitude.y = northLatitude;
     uniformMapProperties.southMercatorYAndOneOverHeight.x = southMercatorY;
-    uniformMapProperties.southMercatorYAndOneOverHeight.y = oneOverMercatorHeight;
+    uniformMapProperties.southMercatorYAndOneOverHeight.y =
+      oneOverMercatorHeight;
 
     // Convert tile limiter rectangle from cartographic to texture space using the tileRectangle.
-    const localizedCartographicLimitRectangle = localizedCartographicLimitRectangleScratch;
+    const localizedCartographicLimitRectangle =
+      localizedCartographicLimitRectangleScratch;
     const cartographicLimitRectangle = clipRectangleAntimeridian(
       tile.rectangle,
-      tileProvider.cartographicLimitRectangle
+      tileProvider.cartographicLimitRectangle,
     );
 
-    const localizedTranslucencyRectangle = localizedTranslucencyRectangleScratch;
+    const localizedTranslucencyRectangle =
+      localizedTranslucencyRectangleScratch;
     const clippedTranslucencyRectangle = clipRectangleAntimeridian(
       tile.rectangle,
-      translucencyRectangle
+      translucencyRectangle,
     );
 
     Cartesian3.fromElements(
       hueShift,
       saturationShift,
       brightnessShift,
-      uniformMapProperties.hsbShift
+      uniformMapProperties.hsbShift,
     );
 
     const cartographicTileRectangle = tile.rectangle;
@@ -2785,7 +2781,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
 
     Cartesian4.clone(
       localizedCartographicLimitRectangle,
-      uniformMapProperties.localizedCartographicLimitRectangle
+      uniformMapProperties.localizedCartographicLimitRectangle,
     );
 
     localizedTranslucencyRectangle.x =
@@ -2803,7 +2799,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
 
     Cartesian4.clone(
       localizedTranslucencyRectangle,
-      uniformMapProperties.localizedTranslucencyRectangle
+      uniformMapProperties.localizedTranslucencyRectangle,
     );
 
     const flat = tileProvider.crcOptions.flat;
@@ -2834,7 +2830,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     uniformMapProperties.inverseTileWidth = inverseTileWidth;
     uniformMapProperties.cartographicTileRectangle = new Cartesian2(
       cartographicTileRectangle.west,
-      cartographicTileRectangle.south
+      cartographicTileRectangle.south,
     );
     const uplift = tileProvider.crcOptions.uplift;
     if (uplift) {
@@ -2919,10 +2915,8 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       const imageryLayer = imagery.imageryLayer;
 
       if (!defined(tileImagery.textureTranslationAndScale)) {
-        tileImagery.textureTranslationAndScale = imageryLayer._calculateTextureTranslationAndScale(
-          tile,
-          tileImagery
-        );
+        tileImagery.textureTranslationAndScale =
+          imageryLayer._calculateTextureTranslationAndScale(tile, tileImagery);
       }
 
       uniformMapProperties.dayTextures[numberOfDayTextures] = texture;
@@ -2992,22 +2986,19 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
         applySplit ||
         uniformMapProperties.dayTextureSplit[numberOfDayTextures] !== 0.0;
       invertColor = invertColor || Boolean(imageryLayer.invertColor);
-      uniformMapProperties.crc3dTextureInvertColor[
-        numberOfDayTextures
-      ] = Boolean(imageryLayer.invertColor);
+      uniformMapProperties.crc3dTextureInvertColor[numberOfDayTextures] =
+        Boolean(imageryLayer.invertColor);
       filterColor = filterColor || Boolean(imageryLayer.filterColor);
       if (imageryLayer.filterColor) {
-        uniformMapProperties.crc3dTextureFilterColor[
-          numberOfDayTextures
-        ] = new Cartesian3(
-          imageryLayer.filterColor.red,
-          imageryLayer.filterColor.green,
-          imageryLayer.filterColor.blue
-        );
+        uniformMapProperties.crc3dTextureFilterColor[numberOfDayTextures] =
+          new Cartesian3(
+            imageryLayer.filterColor.red,
+            imageryLayer.filterColor.green,
+            imageryLayer.filterColor.blue,
+          );
       } else {
-        uniformMapProperties.crc3dTextureFilterColor[
-          numberOfDayTextures
-        ] = new Cartesian3(1, 1, 1);
+        uniformMapProperties.crc3dTextureFilterColor[numberOfDayTextures] =
+          new Cartesian3(1, 1, 1);
       }
 
       // 添加染色
@@ -3027,21 +3018,21 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       let dayTextureCutoutRectangle =
         uniformMapProperties.dayTextureCutoutRectangles[numberOfDayTextures];
       if (!defined(dayTextureCutoutRectangle)) {
-        dayTextureCutoutRectangle = uniformMapProperties.dayTextureCutoutRectangles[
-          numberOfDayTextures
-        ] = new Cartesian4();
+        dayTextureCutoutRectangle =
+          uniformMapProperties.dayTextureCutoutRectangles[numberOfDayTextures] =
+            new Cartesian4();
       }
 
       Cartesian4.clone(Cartesian4.ZERO, dayTextureCutoutRectangle);
       if (defined(imageryLayer.cutoutRectangle)) {
         const cutoutRectangle = clipRectangleAntimeridian(
           cartographicTileRectangle,
-          imageryLayer.cutoutRectangle
+          imageryLayer.cutoutRectangle,
         );
         const intersection = Rectangle.simpleIntersection(
           cutoutRectangle,
           cartographicTileRectangle,
-          rectangleIntersectionScratch
+          rectangleIntersectionScratch,
         );
         applyCutout = defined(intersection) || applyCutout;
 
@@ -3063,9 +3054,8 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
       let colorToAlpha =
         uniformMapProperties.colorsToAlpha[numberOfDayTextures];
       if (!defined(colorToAlpha)) {
-        colorToAlpha = uniformMapProperties.colorsToAlpha[
-          numberOfDayTextures
-        ] = new Cartesian4();
+        colorToAlpha = uniformMapProperties.colorsToAlpha[numberOfDayTextures] =
+          new Cartesian4();
       }
 
       const hasColorToAlpha =
@@ -3103,7 +3093,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     uniformMapProperties.waterMask = waterMaskTexture;
     Cartesian4.clone(
       waterMaskTranslationAndScale,
-      uniformMapProperties.waterMaskTranslationAndScale
+      uniformMapProperties.waterMaskTranslationAndScale,
     );
 
     uniformMapProperties.minMaxHeight.x = encoding.minimumHeight;
@@ -3117,7 +3107,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     if (clippingPlanesEnabled) {
       uniformMapProperties.clippingPlanesEdgeColor = Color.clone(
         clippingPlanes.edgeColor,
-        uniformMapProperties.clippingPlanesEdgeColor
+        uniformMapProperties.clippingPlanesEdgeColor,
       );
       uniformMapProperties.clippingPlanesEdgeWidth = clippingPlanes.edgeWidth;
     }
@@ -3173,7 +3163,7 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
     }
 
     command.shaderProgram = tileProvider._surfaceShaderSet.getShaderProgram(
-      surfaceShaderSetOptions
+      surfaceShaderSetOptions,
     );
     command.castShadows = castShadows;
     command.receiveShadows = receiveShadows;
@@ -3203,30 +3193,30 @@ function addDrawCommandsForTile(tileProvider, tile, frameState, isUplift) {
         frameState.mapProjection,
         tileBoundingRegion.minimumHeight,
         tileBoundingRegion.maximumHeight,
-        boundingVolume
+        boundingVolume,
       );
       Cartesian3.fromElements(
         boundingVolume.center.z,
         boundingVolume.center.x,
         boundingVolume.center.y,
-        boundingVolume.center
+        boundingVolume.center,
       );
 
       if (frameState.mode === SceneMode.MORPHING) {
         boundingVolume = BoundingSphere.union(
           tileBoundingRegion.boundingSphere,
           boundingVolume,
-          boundingVolume
+          boundingVolume,
         );
       }
     } else {
       command.boundingVolume = BoundingSphere.clone(
         tileBoundingRegion.boundingSphere,
-        boundingVolume
+        boundingVolume,
       );
       command.orientedBoundingBox = OrientedBoundingBox.clone(
         tileBoundingRegion.boundingVolume,
-        orientedBoundingBox
+        orientedBoundingBox,
       );
     }
 
